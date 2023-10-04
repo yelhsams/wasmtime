@@ -77,7 +77,8 @@ impl<K: Hash + Eq, V> StableMap<K, V> {
         self.0.contains_key(k)
     }
 
-    fn get(&self, k: &K) -> Option<&V> {
+    /// Need to use in ISLE veri parsing.
+    pub fn get(&self, k: &K) -> Option<&V> {
         self.0.get(k)
     }
 

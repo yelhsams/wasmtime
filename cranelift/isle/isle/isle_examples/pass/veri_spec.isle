@@ -1,0 +1,14 @@
+(type u8 (primitive u8))
+
+(spec (A i j) (provide (= (if true (= i j) (= i (bvneg j))))))
+(decl A (u8 u8) u8)
+
+(spec (B i) 
+  (provide (= (bvadd i #xff) #b00000000)) 
+  (require (= (= 1 2) false)))
+(decl B (u8) u8)
+
+(rule first 1 (A x x) x)
+(rule second 0 (A x _) 0)
+
+(rule third 1 (B x) x)

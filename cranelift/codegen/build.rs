@@ -187,6 +187,7 @@ fn get_isle_compilations(
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_opt.isle"));
     let prelude_lower_isle =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_lower.isle"));
+    let inst_specs = make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("inst_specs.isle"));
 
     // Directory for mid-end optimizations.
     let src_opts = make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("opts"));
@@ -252,6 +253,7 @@ fn get_isle_compilations(
                     prelude_lower_isle.clone(),
                     src_isa_aarch64.join("inst.isle"),
                     src_isa_aarch64.join("inst_neon.isle"),
+                    inst_specs.clone(),
                     src_isa_aarch64.join("lower.isle"),
                     src_isa_aarch64.join("lower_dynamic_neon.isle"),
                 ],
@@ -284,7 +286,7 @@ fn get_isle_compilations(
     })
 }
 
-fn build_isle(
+pub fn build_isle(
     crate_dir: &std::path::Path,
     isle_dir: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error + 'static>> {
