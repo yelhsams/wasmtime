@@ -1402,7 +1402,10 @@ fn add_isle_constraints(
         ),
         ("OperandSize".to_owned(), annotation_ir::Type::Int),
         ("Reg".to_owned(), annotation_ir::Type::BitVector),
-        ("IntCC".to_owned(), annotation_ir::Type::BitVectorWithWidth(8)),
+        (
+            "IntCC".to_owned(),
+            annotation_ir::Type::BitVectorWithWidth(8),
+        ),
         ("Inst".to_owned(), annotation_ir::Type::BitVector),
         ("Amode".to_owned(), annotation_ir::Type::BitVector),
         ("Value".to_owned(), annotation_ir::Type::BitVector),

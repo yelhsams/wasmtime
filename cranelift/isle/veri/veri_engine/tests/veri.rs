@@ -1306,9 +1306,7 @@ fn test_broken_cls_8() {
         test_from_file_with_lhs_termname_simple(
             "./examples/broken/cls/broken_cls8.isle",
             "cls".to_string(),
-            vec![
-                (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
-            ],
+            vec![(Bitwidth::I8, VerificationResult::Failure(Counterexample {}))],
         )
     });
 }
@@ -1387,10 +1385,8 @@ fn test_broken_ctz_32_64() {
             "./examples/broken/ctz/broken_ctz.isle",
             "clz".to_string(),
             vec![
+                (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
                 (
-                    Bitwidth::I8,
-                    VerificationResult::Failure(Counterexample {}),
-                ),                (
                     Bitwidth::I16,
                     VerificationResult::Failure(Counterexample {}),
                 ),
@@ -1913,7 +1909,6 @@ fn test_named_bxor_fits_in_64() {
     })
 }
 
-
 #[test]
 fn test_named_band_not_right() {
     run_and_retry(|| {
@@ -2009,7 +2004,6 @@ fn test_named_bxor_not_left() {
         )
     })
 }
-
 
 #[test]
 fn test_named_bnot() {
@@ -3184,18 +3178,15 @@ fn test_broken_imm_udiv_cve_underlying() {
     })
 }
 
-
 #[test]
 fn test_broken_imm_udiv_cve_underlying_32() {
     // Since there are no bitvectors in the signature, need a custom assumption
     // hook to pass through the value of the type argument
     run_and_retry(|| {
-        static EXPECTED: [(Bitwidth, VerificationResult); 1] = [
-            (
-                Bitwidth::I32,
-                VerificationResult::Failure(Counterexample {}),
-            ),
-        ];
+        static EXPECTED: [(Bitwidth, VerificationResult); 1] = [(
+            Bitwidth::I32,
+            VerificationResult::Failure(Counterexample {}),
+        )];
         for (ty, result) in &EXPECTED {
             let config = Config {
                 dyn_width: false,

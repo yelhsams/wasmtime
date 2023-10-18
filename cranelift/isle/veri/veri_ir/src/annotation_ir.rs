@@ -193,7 +193,6 @@ pub enum Expr {
     A64Rev(Box<Expr>, Box<Expr>, u32),
     BVPopcnt(Box<Expr>, u32),
 
-
     // Binary operators
     BVMul(Box<Expr>, Box<Expr>, u32),
     BVUDiv(Box<Expr>, Box<Expr>, u32),
@@ -226,7 +225,7 @@ pub enum Expr {
     // Extract specified bits
     BVExtract(usize, usize, Box<Expr>, u32),
 
-    // Concat two bitvectors 
+    // Concat two bitvectors
     BVConcat(Vec<Expr>, u32),
 
     // Convert integer to bitvector
@@ -318,7 +317,7 @@ impl Expr {
             | Expr::BVSubs(_, _, _, t)
             | Expr::BVPopcnt(_, t)
             | Expr::Conditional(_, _, _, t)
-            | Expr::Switch(_, _, t)  => *t,
+            | Expr::Switch(_, _, t) => *t,
         }
     }
 }

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use cranelift_isle::ast;
+use std::collections::HashMap;
 
 use cranelift_isle::ast::Defs;
 use cranelift_isle::ast::Ident;
@@ -52,7 +52,7 @@ pub fn spec_to_annotation_bound_var(i: &Ident, env: &ParsingEnv) -> BoundVar {
 
 fn spec_to_usize(s: &SpecExpr) -> Option<usize> {
     match s {
-        SpecExpr::ConstInt { val,  pos : _ } => Some(*val as usize),
+        SpecExpr::ConstInt { val, pos: _ } => Some(*val as usize),
         _ => None,
     }
 }
@@ -156,22 +156,22 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         SpecOp::BVSge => binop(|x, y, i| Expr::BVSgte(x, y, i), args, pos, env),
         SpecOp::Rotr => binop(|x, y, i| Expr::BVRotr(x, y, i), args, pos, env),
         SpecOp::Rotl => binop(|x, y, i| Expr::BVRotl(x, y, i), args, pos, env),
-        SpecOp::ZeroExt =>{
-            match spec_to_usize(&args[0]) {
-                Some(i) => {
-                    Expr::BVZeroExtTo(Box::new(Width::Const(i)), Box::new(spec_to_expr(&args[1], env)), 0)
-                }
-                None => binop(|x, y, i| Expr::BVZeroExtToVarWidth(x, y, i), args, pos, env)
-            }
-        }
-        SpecOp::SignExt =>{
-            match spec_to_usize(&args[0]) {
-                Some(i) => {
-                    Expr::BVSignExtTo(Box::new(Width::Const(i)), Box::new(spec_to_expr(&args[1], env)), 0)
-                }
-                None => binop(|x, y, i| Expr::BVSignExtToVarWidth(x, y, i), args, pos, env)
-            }
-        }
+        SpecOp::ZeroExt => match spec_to_usize(&args[0]) {
+            Some(i) => Expr::BVZeroExtTo(
+                Box::new(Width::Const(i)),
+                Box::new(spec_to_expr(&args[1], env)),
+                0,
+            ),
+            None => binop(|x, y, i| Expr::BVZeroExtToVarWidth(x, y, i), args, pos, env),
+        },
+        SpecOp::SignExt => match spec_to_usize(&args[0]) {
+            Some(i) => Expr::BVSignExtTo(
+                Box::new(Width::Const(i)),
+                Box::new(spec_to_expr(&args[1], env)),
+                0,
+            ),
+            None => binop(|x, y, i| Expr::BVSignExtToVarWidth(x, y, i), args, pos, env),
+        },
         SpecOp::ConvTo => binop(|x, y, i| Expr::BVConvToVarWidth(x, y, i), args, pos, env),
 
         // AVH TODO
@@ -260,7 +260,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
 
 fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
     match s {
-        SpecExpr::ConstInt { val,  pos : _ } => Expr::Const(
+        SpecExpr::ConstInt { val, pos: _ } => Expr::Const(
             Const {
                 ty: Type::Int,
                 value: *val,
@@ -268,7 +268,7 @@ fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
             },
             0,
         ),
-        SpecExpr::ConstBitVec { val, width, pos : _ } => Expr::Const(
+        SpecExpr::ConstBitVec { val, width, pos: _ } => Expr::Const(
             Const {
                 ty: Type::BitVectorWithWidth(*width as usize),
                 value: *val,
@@ -276,7 +276,7 @@ fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
             },
             0,
         ),
-        SpecExpr::ConstBool { val,  pos : _ } => Expr::Const(
+        SpecExpr::ConstBool { val, pos: _ } => Expr::Const(
             Const {
                 ty: Type::Bool,
                 value: *val as i128,
@@ -284,7 +284,7 @@ fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
             },
             0,
         ),
-        SpecExpr::Var { var, pos : _} => Expr::Var(string_from_ident(env, var), 0),
+        SpecExpr::Var { var, pos: _ } => Expr::Var(string_from_ident(env, var), 0),
         SpecExpr::Op { op, args, pos } => spec_op_to_expr(op, args, pos, env),
         SpecExpr::Pair { l, r } => {
             unreachable!(
@@ -306,21 +306,24 @@ fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
 pub fn parse_annotations(defs: &Defs, typeenv: &TypeEnv) -> AnnotationEnv {
     let mut annotation_map = HashMap::new();
 
-    let mut env = ParsingEnv { typeenv, enums: HashMap::new() };
+    let mut env = ParsingEnv {
+        typeenv,
+        enums: HashMap::new(),
+    };
 
     // Traverse models to process spec annotations for enums
     for def in &defs.defs {
         match def {
-            &ast::Def::Model(Model{ref name, ref val}) => {
+            &ast::Def::Model(Model { ref name, ref val }) => {
                 match val {
                     ast::ModelValue::TypeValue(_) => {
                         // AVH todo, skipping for now
                         ()
-                    },
+                    }
                     ast::ModelValue::EnumValues(vals) => {
                         for (v, e) in vals {
-                            let name =  string_from_ident(&env, name); 
-                            let v =  string_from_ident(&env, v); 
+                            let name = string_from_ident(&env, name);
+                            let v = string_from_ident(&env, v);
                             let enum_name = format!("{}.{}", name, v);
                             let val = spec_to_expr(e, &env);
                             let ty = match val {
@@ -338,15 +341,19 @@ pub fn parse_annotations(defs: &Defs, typeenv: &TypeEnv) -> AnnotationEnv {
                             };
                             let annotation = TermAnnotation {
                                 sig,
-                                assumptions: vec![Box::new(Expr::Eq(Box::new(Expr::Var(RESULT.to_string(), 0)), Box::new(val), 0))],
+                                assumptions: vec![Box::new(Expr::Eq(
+                                    Box::new(Expr::Var(RESULT.to_string(), 0)),
+                                    Box::new(val),
+                                    0,
+                                ))],
                                 assertions: vec![],
                             };
                             annotation_map.insert(enum_name, annotation);
                         }
-                    },
+                    }
                 }
             }
-            _ => ()
+            _ => (),
         }
     }
 
