@@ -5,15 +5,14 @@ use std::hash::Hash;
 use crate::annotations::AnnotationEnv;
 use crate::termname::pattern_contains_termname;
 use cranelift_isle as isle;
-use isle::ast::{Decl, Defs};
-use isle::sema::{Pattern, TermEnv, TypeEnv, VarId};
+use isle::sema::{Pattern, TermEnv, TermId, TypeEnv, VarId};
 use itertools::izip;
 use veri_ir::{annotation_ir, ConcreteTest, Expr, TermSignature, Type, TypeContext};
 
 use crate::{Config, FLAGS_WIDTH, REG_WIDTH};
 
 #[derive(Clone, Debug)]
-struct RuleParseTree<'a> {
+struct RuleParseTree {
     // a map of var name to type variable, where var could be
     // Pattern::Var or var used in Pattern::BindPattern
     varid_to_type_var_map: HashMap<VarId, u32>,
@@ -25,8 +24,6 @@ struct RuleParseTree<'a> {
     concrete_constraints: HashSet<TypeExpr>,
     var_constraints: HashSet<TypeExpr>,
     bv_constraints: HashSet<TypeExpr>,
-    // a map of terms in the rule to their isle ast decl
-    decls: &'a HashMap<String, isle::ast::Decl>,
 
     ty_vars: HashMap<veri_ir::Expr, u32>,
     quantified_vars: HashSet<(String, u32)>,
@@ -45,7 +42,7 @@ pub enum TypeVarConstruct {
     Var,
     BindPattern,
     Wildcard(u32),
-    Term(String),
+    Term(TermId),
     Const(i128),
     Let(Vec<String>),
     And,
@@ -97,7 +94,6 @@ pub struct RuleSemantics {
 }
 
 pub fn type_rules_with_term_and_types(
-    defs: Defs,
     termenv: &TermEnv,
     typeenv: &TypeEnv,
     annotation_env: &AnnotationEnv,
@@ -105,8 +101,6 @@ pub fn type_rules_with_term_and_types(
     types: &TermSignature,
     concrete: &Option<ConcreteTest>,
 ) -> HashMap<isle::sema::RuleId, RuleSemantics> {
-    let decls = build_decl_map(defs);
-
     let mut solutions = HashMap::new();
 
     for rule in &termenv.rules {
@@ -136,7 +130,6 @@ pub fn type_rules_with_term_and_types(
         if let Some(s) = type_annotations_using_rule(
             rule,
             annotation_env,
-            &decls,
             typeenv,
             termenv,
             &config.term,
@@ -157,19 +150,6 @@ pub fn type_rules_with_term_and_types(
     solutions
 }
 
-fn build_decl_map(defs: Defs) -> HashMap<String, Decl> {
-    let mut decls = HashMap::new();
-    for def in defs.defs {
-        match def {
-            isle::ast::Def::Decl(d) => {
-                decls.insert(d.term.0.clone(), d);
-            }
-            _ => continue,
-        }
-    }
-    decls
-}
-
 fn convert_type(aty: &annotation_ir::Type) -> veri_ir::Type {
     match aty {
         annotation_ir::Type::BitVectorUnknown(..) => veri_ir::Type::BitVector(None),
@@ -184,7 +164,6 @@ fn convert_type(aty: &annotation_ir::Type) -> veri_ir::Type {
 fn type_annotations_using_rule<'a>(
     rule: &'a isle::sema::Rule,
     annotation_env: &'a AnnotationEnv,
-    decls: &'a HashMap<String, isle::ast::Decl>,
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
     term: &String,
@@ -198,7 +177,6 @@ fn type_annotations_using_rule<'a>(
         concrete_constraints: HashSet::new(),
         var_constraints: HashSet::new(),
         bv_constraints: HashSet::new(),
-        decls,
         ty_vars: HashMap::new(),
         quantified_vars: HashSet::new(),
         free_vars: HashSet::new(),
@@ -228,6 +206,8 @@ fn type_annotations_using_rule<'a>(
             let iflet_lhs_expr = add_rule_constraints(
                 &mut parse_tree,
                 iflet_lhs,
+                termenv,
+                typeenv,
                 annotation_env,
                 &mut annotation_infos,
                 false,
@@ -239,6 +219,8 @@ fn type_annotations_using_rule<'a>(
             let iflet_rhs_expr = add_rule_constraints(
                 &mut parse_tree,
                 iflet_rhs,
+                termenv,
+                typeenv,
                 annotation_env,
                 &mut annotation_infos,
                 false,
@@ -278,6 +260,8 @@ fn type_annotations_using_rule<'a>(
     let lhs_expr = add_rule_constraints(
         &mut parse_tree,
         lhs,
+        termenv,
+        typeenv,
         annotation_env,
         &mut annotation_infos,
         false,
@@ -289,6 +273,8 @@ fn type_annotations_using_rule<'a>(
     let rhs_expr = add_rule_constraints(
         &mut parse_tree,
         rhs,
+        termenv,
+        typeenv,
         annotation_env,
         &mut annotation_infos,
         true,
@@ -1366,8 +1352,9 @@ fn add_annotation_constraints(
 }
 
 fn add_isle_constraints(
-    def: isle::ast::Def,
+    term: &isle::sema::Term,
     tree: &mut RuleParseTree,
+    typeenv: &TypeEnv,
     annotation_info: &mut AnnotationTypeInfo,
     annotation: annotation_ir::TermSignature,
 ) {
@@ -1431,49 +1418,47 @@ fn add_isle_constraints(
     }
     annotation_vars.push(annotation.ret.name);
 
-    match def {
-        isle::ast::Def::Decl(d) => {
-            let mut isle_types = vec![];
-            for t in d.arg_tys {
-                isle_types.push(t.0);
-            }
-            isle_types.push(d.ret_ty.0);
-            assert_eq!(annotation_vars.len(), isle_types.len());
+    let mut isle_types = vec![];
+    for arg_ty in term.arg_tys.iter() {
+        isle_types.push(arg_ty.clone());
+    }
+    isle_types.push(term.ret_ty.clone());
+    assert_eq!(annotation_vars.len(), isle_types.len());
 
-            for (isle_type, annotation_var) in isle_types.iter().zip(annotation_vars) {
-                // in case the var was not in the annotation
-                if !annotation_info
-                    .var_to_type_var
-                    .contains_key(&annotation_var)
-                {
-                    let type_var = tree.next_type_var;
-                    tree.next_type_var += 1;
+    for (isle_type_id, annotation_var) in isle_types.iter().zip(annotation_vars) {
+        // in case the var was not in the annotation
+        if !annotation_info
+            .var_to_type_var
+            .contains_key(&annotation_var)
+        {
+            let type_var = tree.next_type_var;
+            tree.next_type_var += 1;
 
-                    annotation_info
-                        .var_to_type_var
-                        .insert(annotation_var.clone(), type_var);
-                }
-
-                if let Some(ir_type) = clif_to_ir_types.get(isle_type) {
-                    let type_var = annotation_info.var_to_type_var[&annotation_var];
-                    match ir_type {
-                        annotation_ir::Type::BitVector => tree
-                            .bv_constraints
-                            .insert(TypeExpr::Concrete(type_var, ir_type.clone())),
-                        _ => tree
-                            .concrete_constraints
-                            .insert(TypeExpr::Concrete(type_var, ir_type.clone())),
-                    };
-                }
-            }
+            annotation_info
+                .var_to_type_var
+                .insert(annotation_var.clone(), type_var);
         }
-        _ => panic!("def must be decl, got: {:#?}", def),
+
+        let isle_type_name = typeenv.types[isle_type_id.index()].name(typeenv);
+        if let Some(ir_type) = clif_to_ir_types.get(isle_type_name) {
+            let type_var = annotation_info.var_to_type_var[&annotation_var];
+            match ir_type {
+                annotation_ir::Type::BitVector => tree
+                    .bv_constraints
+                    .insert(TypeExpr::Concrete(type_var, ir_type.clone())),
+                _ => tree
+                    .concrete_constraints
+                    .insert(TypeExpr::Concrete(type_var, ir_type.clone())),
+            };
+        }
     }
 }
 
 fn add_rule_constraints(
     tree: &mut RuleParseTree,
     curr: &mut TypeVarNode,
+    termenv: &TermEnv,
+    typeenv: &TypeEnv,
     annotation_env: &AnnotationEnv,
     annotation_infos: &mut Vec<AnnotationTypeInfo>,
     rhs: bool,
@@ -1482,7 +1467,15 @@ fn add_rule_constraints(
     // For recursive definitions without annotations (like And and Let), recur.
     let mut children = vec![];
     for child in &mut curr.children {
-        if let Some(e) = add_rule_constraints(tree, child, annotation_env, annotation_infos, rhs) {
+        if let Some(e) = add_rule_constraints(
+            tree,
+            child,
+            termenv,
+            typeenv,
+            annotation_env,
+            annotation_infos,
+            rhs,
+        ) {
             children.push(e);
         } else {
             return None;
@@ -1548,21 +1541,25 @@ fn add_rule_constraints(
             }
             children.last().cloned()
         }
-        TypeVarConstruct::Term(t) => {
+        TypeVarConstruct::Term(term_id) => {
+            let term = &termenv.terms[term_id.index()];
+            let term_name = typeenv.syms[term.name.index()].clone();
+
             // Print term for debugging
-            print!(" {}", t);
+            print!(" {}", term_name);
+
             tree.quantified_vars
                 .insert((curr.ident.clone(), curr.type_var));
-            let a = annotation_env.get_annotation_for_term(t);
+            let a = annotation_env.get_annotation_for_term(term_id);
             if a.is_none() {
-                println!("\nSkipping rule with unannotated term: {}", t);
+                println!("\nSkipping rule with unannotated term: {:?}", term_id);
                 return None;
             }
             let annotation = a.unwrap();
 
             // Test code only: support providing concrete inputs
             if let Some(concrete) = &tree.concrete {
-                if concrete.termname.eq(t) {
+                if concrete.termname == term_name {
                     for (child, node, input) in
                         izip!(&children, curr.children.iter(), &concrete.args)
                     {
@@ -1596,27 +1593,25 @@ fn add_rule_constraints(
                 let (typed_expr, _) = add_annotation_constraints(*expr, tree, &mut annotation_info);
                 curr.assertions.push(typed_expr.clone());
                 tree.assumptions.push(typed_expr);
-                if tree.decls.contains_key(t) {
-                    add_isle_constraints(
-                        cranelift_isle::ast::Def::Decl(tree.decls[t].clone()),
-                        tree,
-                        &mut annotation_info,
-                        annotation.sig.clone(),
-                    );
-                }
+                add_isle_constraints(
+                    term,
+                    tree,
+                    typeenv,
+                    &mut annotation_info,
+                    annotation.sig.clone(),
+                );
             }
             // For assertions, global assume if not RHS, otherwise assert
             for expr in annotation.assertions {
                 let (typed_expr, _) = add_annotation_constraints(*expr, tree, &mut annotation_info);
                 curr.assertions.push(typed_expr.clone());
-                if tree.decls.contains_key(t) {
-                    add_isle_constraints(
-                        cranelift_isle::ast::Def::Decl(tree.decls[t].clone()),
-                        tree,
-                        &mut annotation_info,
-                        annotation.sig.clone(),
-                    );
-                }
+                add_isle_constraints(
+                    term,
+                    tree,
+                    typeenv,
+                    &mut annotation_info,
+                    annotation.sig.clone(),
+                );
                 if rhs {
                     tree.rhs_assertions.push(typed_expr);
                 } else {
@@ -2044,7 +2039,7 @@ fn create_parse_tree_pattern(
 
             TypeVarNode {
                 ident: format!("{}__{}", name, type_var),
-                construct: TypeVarConstruct::Term(name),
+                construct: TypeVarConstruct::Term(term_id.clone()),
                 type_var,
                 children,
                 assertions: vec![],
@@ -2219,7 +2214,7 @@ fn create_parse_tree_expr(
 
             TypeVarNode {
                 ident: format!("{}__{}", name, type_var),
-                construct: TypeVarConstruct::Term(name),
+                construct: TypeVarConstruct::Term(term_id.clone()),
                 type_var,
                 children,
                 assertions: vec![],

@@ -201,7 +201,6 @@ pub struct TermEnv {
     /// types together.
     pub converters: StableMap<(TypeId, TypeId), TermId>,
 
-
     /// Flag for whether to expand internal extractors in the
     /// translation from the AST to sema.
     pub expand_internal_extractors: bool,
@@ -1165,7 +1164,11 @@ impl Bindings {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs, expand_internal_extractors: bool) -> Result<TermEnv, Errors> {
+    pub fn from_ast(
+        tyenv: &mut TypeEnv,
+        defs: &ast::Defs,
+        expand_internal_extractors: bool,
+    ) -> Result<TermEnv, Errors> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: StableMap::new(),
@@ -2389,7 +2392,8 @@ impl TermEnv {
         Some(IfLet { lhs, rhs })
     }
 
-    fn get_term_by_name(&self, tyenv: &TypeEnv, sym: &ast::Ident) -> Option<TermId> {
+    /// Lookup term by name.
+    pub fn get_term_by_name(&self, tyenv: &TypeEnv, sym: &ast::Ident) -> Option<TermId> {
         tyenv
             .intern(sym)
             .and_then(|sym| self.term_map.get(&sym))

@@ -7,7 +7,7 @@ use cranelift_isle::ast::Model;
 use cranelift_isle::ast::SpecExpr;
 use cranelift_isle::ast::SpecOp;
 use cranelift_isle::lexer::Pos;
-use cranelift_isle::sema::TypeEnv;
+use cranelift_isle::sema::{TermEnv, TermId, TypeEnv};
 use veri_ir::annotation_ir::Width;
 use veri_ir::annotation_ir::{BoundVar, Const, Expr, TermAnnotation, TermSignature, Type};
 
@@ -21,31 +21,27 @@ pub struct ParsingEnv<'a> {
 
 #[derive(Clone, Debug)]
 pub struct AnnotationEnv {
-    pub annotation_map: HashMap<String, TermAnnotation>,
+    pub annotation_map: HashMap<TermId, TermAnnotation>,
 }
 
 impl AnnotationEnv {
-    pub fn new(annotation_env: HashMap<String, TermAnnotation>) -> Self {
+    pub fn new(annotation_env: HashMap<TermId, TermAnnotation>) -> Self {
         AnnotationEnv {
             annotation_map: annotation_env,
         }
     }
 
-    pub fn get_annotation_for_term(&self, term: &str) -> Option<TermAnnotation> {
-        if self.annotation_map.contains_key(term) {
-            return Some(self.annotation_map[term].clone());
+    pub fn get_annotation_for_term(&self, term_id: &TermId) -> Option<TermAnnotation> {
+        if self.annotation_map.contains_key(term_id) {
+            return Some(self.annotation_map[term_id].clone());
         }
         None
     }
 }
 
-pub fn string_from_ident(_env: &ParsingEnv, id: &ast::Ident) -> String {
-    format!("{}", &id.0)
-}
-
-pub fn spec_to_annotation_bound_var(i: &Ident, env: &ParsingEnv) -> BoundVar {
+pub fn spec_to_annotation_bound_var(i: &Ident) -> BoundVar {
     BoundVar {
-        name: string_from_ident(env, i),
+        name: i.0.clone(),
         ty: None,
     }
 }
@@ -284,7 +280,7 @@ fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
             },
             0,
         ),
-        SpecExpr::Var { var, pos: _ } => Expr::Var(string_from_ident(env, var), 0),
+        SpecExpr::Var { var, pos: _ } => Expr::Var(var.0.clone(), 0),
         SpecExpr::Op { op, args, pos } => spec_op_to_expr(op, args, pos, env),
         SpecExpr::Pair { l, r } => {
             unreachable!(
@@ -293,17 +289,16 @@ fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
             )
         }
         SpecExpr::Enum { name } => {
-            let n = string_from_ident(&env, name);
-            if let Some(e) = env.enums.get(&n) {
+            if let Some(e) = env.enums.get(&name.0) {
                 e.clone()
             } else {
-                panic!("Can't find model for enum {}", n);
+                panic!("Can't find model for enum {}", name.0);
             }
         }
     }
 }
 
-pub fn parse_annotations(defs: &Defs, typeenv: &TypeEnv) -> AnnotationEnv {
+pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> AnnotationEnv {
     let mut annotation_map = HashMap::new();
 
     let mut env = ParsingEnv {
@@ -322,15 +317,14 @@ pub fn parse_annotations(defs: &Defs, typeenv: &TypeEnv) -> AnnotationEnv {
                     }
                     ast::ModelValue::EnumValues(vals) => {
                         for (v, e) in vals {
-                            let name = string_from_ident(&env, name);
-                            let v = string_from_ident(&env, v);
-                            let enum_name = format!("{}.{}", name, v);
+                            let ident = ast::Ident(format!("{}.{}", name.0, v.0), v.1);
+                            let term_id = termenv.get_term_by_name(typeenv, &ident).unwrap();
                             let val = spec_to_expr(e, &env);
                             let ty = match val {
                                 Expr::Const(Const { ref ty, .. }, _) => ty,
                                 _ => unreachable!(),
                             };
-                            env.enums.insert(enum_name.clone(), val.clone());
+                            env.enums.insert(ident.0.clone(), val.clone());
                             let result = BoundVar {
                                 name: RESULT.to_string(),
                                 ty: Some(ty.clone()),
@@ -348,7 +342,7 @@ pub fn parse_annotations(defs: &Defs, typeenv: &TypeEnv) -> AnnotationEnv {
                                 ))],
                                 assertions: vec![],
                             };
-                            annotation_map.insert(enum_name, annotation);
+                            annotation_map.insert(term_id, annotation);
                         }
                     }
                 }
@@ -361,13 +355,13 @@ pub fn parse_annotations(defs: &Defs, typeenv: &TypeEnv) -> AnnotationEnv {
     for def in &defs.defs {
         match def {
             &ast::Def::Spec(ref spec) => {
-                let termname = string_from_ident(&env, &spec.term);
+                let term_id = termenv.get_term_by_name(typeenv, &spec.term).unwrap();
                 // dbg!(&termname);
                 let sig = TermSignature {
                     args: spec
                         .args
                         .iter()
-                        .map(|a| spec_to_annotation_bound_var(a, &env))
+                        .map(|a| spec_to_annotation_bound_var(a))
                         .collect(),
                     ret: BoundVar {
                         name: RESULT.to_string(),
@@ -390,7 +384,7 @@ pub fn parse_annotations(defs: &Defs, typeenv: &TypeEnv) -> AnnotationEnv {
                     assumptions,
                     assertions,
                 };
-                annotation_map.insert(termname, annotation);
+                annotation_map.insert(term_id, annotation);
             }
             _ => {}
         }

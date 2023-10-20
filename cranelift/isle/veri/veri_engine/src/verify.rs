@@ -23,7 +23,7 @@ pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config) {
     // names to types
     let (typeenv, termenv) = create_envs(&defs).unwrap();
 
-    let annotation_env = parse_annotations(&defs, &typeenv);
+    let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
     // Get the types/widths for this particular term
     let types = isle_inst_types()
@@ -33,7 +33,6 @@ pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config) {
 
     for type_instantiation in types {
         let type_sols = type_rules_with_term_and_types(
-            defs.clone(),
             &termenv,
             &typeenv,
             &annotation_env,

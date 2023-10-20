@@ -1247,7 +1247,6 @@ impl SolverCtx {
                 .assert(self.smt.named(format!("assum{i}"), *a))
                 .unwrap();
 
-            // Uncomment to debug specific asserts
             // println!("assum{}: {}", i, self.smt.display(*a));
 
             //     self.smt.push().unwrap();
@@ -1790,7 +1789,7 @@ fn resolve_dynamic_widths(
                         }
 
                         if unresolved_widths.contains(&width_name) {
-                            // println!("\tResolved width: {}, {}", width_name, width_int);
+                            println!("\tResolved width: {}, {}", width_name, width_int);
                             width_resolutions.insert(width_name, width_int);
                             cur_tyctx
                                 .tymap
