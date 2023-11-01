@@ -142,6 +142,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         SpecOp::BVShl => binop(|x, y, i| Expr::BVShl(x, y, i), args, pos, env),
         SpecOp::BVLshr => binop(|x, y, i| Expr::BVShr(x, y, i), args, pos, env),
         SpecOp::BVAshr => binop(|x, y, i| Expr::BVAShr(x, y, i), args, pos, env),
+        SpecOp::BVSaddo => binop(|x, y, i| Expr::BVSaddo(x, y, i), args, pos, env),
         SpecOp::BVUle => binop(|x, y, i| Expr::BVUlte(x, y, i), args, pos, env),
         SpecOp::BVUlt => binop(|x, y, i| Expr::BVUlt(x, y, i), args, pos, env),
         SpecOp::BVUgt => binop(|x, y, i| Expr::BVUgt(x, y, i), args, pos, env),

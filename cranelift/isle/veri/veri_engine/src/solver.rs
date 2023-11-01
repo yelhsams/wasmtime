@@ -799,6 +799,7 @@ impl SolverCtx {
                     BinaryOp::BVOr => "bvor",
                     BinaryOp::BVXor => "bvxor",
                     BinaryOp::BVShl => "bvshl",
+                    BinaryOp::BVSaddo => "bvsaddo",
                     _ => unreachable!("{:?}", op),
                 };
                 // If we have some static width that isn't the bitwidth, extract based on it

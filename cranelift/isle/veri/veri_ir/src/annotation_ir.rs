@@ -179,6 +179,8 @@ pub enum Expr {
     BVUlt(Box<Expr>, Box<Expr>, u32),
     BVUlte(Box<Expr>, Box<Expr>, u32),
 
+    BVSaddo(Box<Expr>, Box<Expr>, u32),
+
     // Bitvector operations
     //      Note: these follow the naming conventions of the SMT theory of bitvectors:
     //      https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
@@ -303,6 +305,7 @@ impl Expr {
             | Expr::BVShl(_, _, t)
             | Expr::BVShr(_, _, t)
             | Expr::BVAShr(_, _, t)
+            | Expr::BVSaddo(_, _, t)
             | Expr::Lt(_, _, t)
             | Expr::BVZeroExtTo(_, _, t)
             | Expr::BVZeroExtToVarWidth(_, _, t)

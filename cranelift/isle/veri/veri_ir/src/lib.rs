@@ -175,6 +175,8 @@ pub enum BinaryOp {
     BVShl,
     BVShr,
     BVAShr,
+
+    BVSaddo,
 }
 
 /// Expressions (combined across all types).

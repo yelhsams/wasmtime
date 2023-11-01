@@ -116,7 +116,7 @@ pub enum SpecExpr {
     },
     /// An application of a type variant or term.
     Op {
-        op: SpecOp, 
+        op: SpecOp,
         args: Vec<SpecExpr>,
         pos: Pos,
     },
@@ -128,7 +128,7 @@ pub enum SpecExpr {
     /// Enums variant values (enums defined by model)
     Enum {
         name: Ident,
-    }
+    },
 }
 
 /// An operation used to specify term semantics, similar to SMT-LIB syntax.
@@ -173,9 +173,12 @@ pub enum SpecOp {
     BVSlt,
     BVSle,
     BVSgt,
-    BVSge, 
+    BVSge,
 
-    // Desugared bitvector arithmetic operations 
+    // Bitvector overflow checks (SMT-LIB pending standardization)
+    BVSaddo,
+
+    // Desugared bitvector arithmetic operations
     Rotr,
     Rotl,
     Extract,
@@ -214,16 +217,15 @@ pub struct Spec {
     pub requires: Vec<SpecExpr>,
 }
 
-
 /// A model of an SMT-LIB type.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ModelType {
     /// SMT-LIB Int
-    Int, 
+    Int,
     /// SMT-LIB Int
     Bool,
     /// SMT-LIB bitvector, but with a potentially-polymorphic width
-    BitVec(Option<usize>)
+    BitVec(Option<usize>),
 }
 
 /// A construct's value in SMT-LIB

@@ -413,7 +413,7 @@ impl<'a> Parser<'a> {
             let var = self.parse_ident()?;
             Ok(SpecExpr::Var { var, pos })
         } else if self.is_lparen() {
-            // TODO AVH: 
+            // TODO AVH:
             self.expect_lparen()?;
             if self.is_sym() && !self.is_spec_bit_vector() {
                 let sym = self.expect_symbol()?;
@@ -423,18 +423,21 @@ impl<'a> Parser<'a> {
                         args.push(self.parse_spec_expr()?);
                     }
                     self.expect_rparen()?;
-                    return Ok(SpecExpr::Op { op, args, pos })
+                    return Ok(SpecExpr::Op { op, args, pos });
                 };
                 let ident = self.str_to_ident(pos, &sym)?;
                 if self.is_rparen() {
                     self.expect_rparen()?;
-                    return Ok(SpecExpr::Enum { name: ident })
+                    return Ok(SpecExpr::Enum { name: ident });
                 };
-                // AVH TODO: see if we can simplify this to not backtrack, maybe 
-                // kill pairs 
+                // AVH TODO: see if we can simplify this to not backtrack, maybe
+                // kill pairs
                 let r = Box::new(self.parse_spec_expr()?);
                 self.expect_rparen()?;
-                Ok(SpecExpr::Pair { l: Box::new(SpecExpr::Var { var: ident, pos }), r })
+                Ok(SpecExpr::Pair {
+                    l: Box::new(SpecExpr::Var { var: ident, pos }),
+                    r,
+                })
             } else {
                 let l = Box::new(self.parse_spec_expr()?);
                 let r = Box::new(self.parse_spec_expr()?);
@@ -472,6 +475,7 @@ impl<'a> Parser<'a> {
             "bvshl" => Ok(SpecOp::BVShl),
             "bvlshr" => Ok(SpecOp::BVLshr),
             "bvashr" => Ok(SpecOp::BVAshr),
+            "bvsaddo" => Ok(SpecOp::BVSaddo),
             "bvule" => Ok(SpecOp::BVUle),
             "bvult" => Ok(SpecOp::BVUlt),
             "bvugt" => Ok(SpecOp::BVUgt),
@@ -479,7 +483,7 @@ impl<'a> Parser<'a> {
             "bvslt" => Ok(SpecOp::BVSlt),
             "bvsle" => Ok(SpecOp::BVSle),
             "bvsgt" => Ok(SpecOp::BVSgt),
-            "bvsge" => Ok(SpecOp::BVSge), 
+            "bvsge" => Ok(SpecOp::BVSge),
             "rotr" => Ok(SpecOp::Rotr),
             "rotl" => Ok(SpecOp::Rotl),
             "extract" => Ok(SpecOp::Extract),
@@ -492,11 +496,11 @@ impl<'a> Parser<'a> {
             "widthof" => Ok(SpecOp::WidthOf),
             "if" => Ok(SpecOp::If),
             "switch" => Ok(SpecOp::Switch),
-            "subs"=> Ok(SpecOp::Subs),
-            "popcnt"=> Ok(SpecOp::Popcnt),
-            "rev"=> Ok(SpecOp::Rev),
-            "cls"=> Ok(SpecOp::Cls),
-            "clz"=> Ok(SpecOp::Clz),
+            "subs" => Ok(SpecOp::Subs),
+            "popcnt" => Ok(SpecOp::Popcnt),
+            "rev" => Ok(SpecOp::Rev),
+            "cls" => Ok(SpecOp::Cls),
+            "clz" => Ok(SpecOp::Clz),
             x => Err(self.error(pos, format!("Not a valid spec operator: {x}"))),
         }
     }
@@ -546,21 +550,35 @@ impl<'a> Parser<'a> {
             let mut implicit_idx = None;
 
             while !self.is_rparen() {
-                self.expect_lparen()?; // enum value 
+                self.expect_lparen()?; // enum value
                 let name = self.parse_ident()?;
-                let val = if self.is_rparen() { // has implicit enum value
+                let val = if self.is_rparen() {
+                    // has implicit enum value
                     if has_explicit_value {
-                        return Err(self.error(pos, format!("Spec enum has unexpected implicit value after implicit value.")));
+                        return Err(self.error(
+                            pos,
+                            format!(
+                                "Spec enum has unexpected implicit value after implicit value."
+                            ),
+                        ));
                     }
                     implicit_idx = Some(if let Some(idx) = implicit_idx {
                         idx + 1
                     } else {
                         0
                     });
-                    SpecExpr::ConstInt { val: implicit_idx.unwrap(), pos, }
+                    SpecExpr::ConstInt {
+                        val: implicit_idx.unwrap(),
+                        pos,
+                    }
                 } else {
                     if implicit_idx.is_some() {
-                        return Err(self.error(pos, format!("Spec enum has unexpected explicit value after implicit value.")));
+                        return Err(self.error(
+                            pos,
+                            format!(
+                                "Spec enum has unexpected explicit value after implicit value."
+                            ),
+                        ));
                     }
                     has_explicit_value = true;
                     self.parse_spec_expr()?
@@ -570,14 +588,11 @@ impl<'a> Parser<'a> {
             }
             ModelValue::EnumValues(variants)
         } else {
-            return Err(self.error(pos, "Model must be a type or enum".to_string()))
+            return Err(self.error(pos, "Model must be a type or enum".to_string()));
         };
 
         self.expect_rparen()?; // end body
-        Ok(Model{
-            name,
-            val,
-        })
+        Ok(Model { name, val })
     }
 
     fn parse_model_type(&mut self) -> Result<ModelType> {
@@ -592,17 +607,22 @@ impl<'a> Parser<'a> {
                 if self.is_rparen() {
                     None
                 } else if self.is_int() {
-                    Some(usize::try_from(self.expect_int()?).map_err(|err| self.error(pos, format!("Invalid BitVector width: {}", err)))?)
+                    Some(usize::try_from(self.expect_int()?).map_err(|err| {
+                        self.error(pos, format!("Invalid BitVector width: {}", err))
+                    })?)
                 } else {
-                    return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()))
+                    return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()));
                 }
             } else {
-                return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()))
+                return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()));
             };
             self.expect_rparen()?;
             Ok(ModelType::BitVec(width))
         } else {
-            Err(self.error(pos, "Model type be a Bool, Int, or BitVector (bv ...)".to_string()))
+            Err(self.error(
+                pos,
+                "Model type be a Bool, Int, or BitVector (bv ...)".to_string(),
+            ))
         }
     }
 
