@@ -4,7 +4,8 @@ use utils::{
     run_and_retry, test_aarch64_rule_with_lhs_termname_simple, test_aarch64_with_config_simple,
     test_concrete_aarch64_rule_with_lhs_termname, test_concrete_input_from_file_with_lhs_termname,
     test_from_file_with_config_simple, test_from_file_with_lhs_termname,
-    test_from_file_with_lhs_termname_simple, Bitwidth, TestResult,
+    test_from_file_with_lhs_termname_simple, test_x64_rule_with_lhs_termname_simple, Bitwidth,
+    TestResult,
 };
 use veri_engine_lib::widths::isle_inst_types;
 use veri_engine_lib::Config;
@@ -3206,4 +3207,149 @@ fn test_broken_imm_udiv_cve_underlying_32() {
             );
         }
     })
+}
+
+// x64
+
+#[test]
+fn test_named_x64_iadd_base_case_32_or_64_lea() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "iadd_base_case_32_or_64_lea",
+            "iadd",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_to_amode_add_base_case() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "to_amode_add_base_case",
+            "to_amode_add",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_to_amode_add_const_rhs() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "to_amode_add_const_rhs",
+            "to_amode_add",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_to_amode_add_const_lhs() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "to_amode_add_const_lhs",
+            "to_amode_add",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_to_amode_add_const_fold_iadd_lhs_rhs() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "to_amode_add_const_fold_iadd_lhs_rhs",
+            "to_amode_add",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_to_amode_add_const_fold_iadd_lhs_lhs() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "to_amode_add_const_fold_iadd_lhs_lhs",
+            "to_amode_add",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_to_amode_add_const_fold_iadd_rhs_rhs() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "to_amode_add_const_fold_iadd_rhs_rhs",
+            "to_amode_add",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_to_amode_add_const_fold_iadd_rhs_lhs() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "to_amode_add_const_fold_iadd_rhs_lhs",
+            "to_amode_add",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_amode_imm_reg_base() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "amode_imm_reg_base",
+            "amode_imm_reg",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_amode_imm_reg_iadd() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "amode_imm_reg_iadd",
+            "amode_imm_reg",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_amode_imm_reg_reg_shift_no_shift() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "amode_imm_reg_reg_shift_no_shift",
+            "amode_imm_reg_reg_shift",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_amode_imm_reg_reg_shift_shl_rhs() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "amode_imm_reg_reg_shift_shl_rhs",
+            "amode_imm_reg_reg_shift",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
+}
+
+#[test]
+fn test_named_x64_amode_imm_reg_reg_shift_shl_lhs() {
+    run_and_retry(|| {
+        test_x64_rule_with_lhs_termname_simple(
+            "amode_imm_reg_reg_shift_shl_lhs",
+            "amode_imm_reg_reg_shift",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    });
 }

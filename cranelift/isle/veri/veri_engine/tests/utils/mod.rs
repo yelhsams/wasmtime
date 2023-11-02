@@ -243,6 +243,51 @@ pub fn test_aarch64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: T
     test_rules_with_term(inputs, tr, config);
 }
 
+pub fn test_x64_rule_with_lhs_termname_simple(
+    rulename: &str,
+    termname: &str,
+    tr: Vec<(Bitwidth, VerificationResult)>,
+) -> () {
+    test_x64_rule_with_lhs_termname(rulename, termname, TestResult::Simple(tr))
+}
+
+pub fn test_x64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestResult) -> () {
+    println!("Verifying rule `{}` with termname {} ", rulename, termname);
+    // TODO(mbm): dedupe with aarch64
+    // TODO(mbm): share configuration with cranelift/codegen/build.rs (or export it as part of build)
+    let cur_dir = env::current_dir().expect("Can't access current working directory");
+    let clif_isle = cur_dir.join("../../../codegen/src").join("inst_specs.isle");
+    let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
+    let prelude_lower_isle = cur_dir
+        .join("../../../codegen/src")
+        .join("prelude_lower.isle");
+    let mut inputs = vec![
+        build_clif_lower_isle(),
+        prelude_isle,
+        prelude_lower_isle,
+        clif_isle,
+    ];
+    inputs.push(
+        cur_dir
+            .join("../../../codegen/src/isa/x64")
+            .join("inst.isle"),
+    );
+    inputs.push(
+        cur_dir
+            .join("../../../codegen/src/isa/x64")
+            .join("lower.isle"),
+    );
+    let config = Config {
+        dyn_width: false,
+        term: termname.to_string(),
+        distinct_check: true,
+        custom_verification_condition: None,
+        custom_assumptions: None,
+        names: Some(vec![rulename.to_string()]),
+    };
+    test_rules_with_term(inputs, tr, config);
+}
+
 pub fn test_from_file_with_config_simple(
     file: &str,
     config: Config,
