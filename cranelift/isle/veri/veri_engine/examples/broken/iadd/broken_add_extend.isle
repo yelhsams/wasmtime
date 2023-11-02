@@ -38,6 +38,17 @@
     (SXTX #b111)
 ))
 
+(type ExtendOp extern
+  (enum
+    (UXTB)
+    (UXTH)
+    (UXTW)
+    (UXTX)
+    (SXTB)
+    (SXTH)
+    (SXTW)
+    (SXTX)
+))
 
 (decl alu_rr_extend_reg (ALUOp Type Reg ExtendedValue) Reg)
 (extern constructor alu_rr_extend_reg alu_rr_extend_reg)
@@ -68,9 +79,9 @@
 ;; BROKEN: all sign_extend with no zero_extend
 (spec (add_extend ty x y)
     (provide
-      (= result 
+      (= result
          (if (<= ty 32)
-            (conv_to 64 (bvadd (extract 31 0 x) 
+            (conv_to 64 (bvadd (extract 31 0 x)
             (switch (extract 66 64 y)
                   ((ExtendOp.UXTB) (sign_ext 32 (extract 7 0 y)))
                   ((ExtendOp.UXTH) (sign_ext 32 (extract 15 0 y)))
@@ -80,7 +91,7 @@
                   ((ExtendOp.SXTH) (sign_ext 32 (extract 15 0 y)))
                   ((ExtendOp.SXTW) (sign_ext 32 (extract 31 0 y)))
                   ((ExtendOp.SXTX) (sign_ext 32 (extract 31 0 y))))))
-            (bvadd x 
+            (bvadd x
             (switch (extract 66 64 y)
                   ((ExtendOp.UXTB) (sign_ext 64 (extract 7 0 y)))
                   ((ExtendOp.UXTH) (sign_ext 64 (extract 15 0 y)))

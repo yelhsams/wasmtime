@@ -15,15 +15,10 @@
 ;;   01: lsr
 ;;   10: asr
 ;;   11: invalid
-;; the rest will encode a 8-bit shift amount 
+;; the rest will encode a 8-bit shift amount
 (type ShiftOpAndAmt (primitive ShiftOpAndAmt))
 
-(type ALUOp
-  (enum
-    (Add)
-))
-
-(model ALUOp (enum 
+(model ALUOp (enum
       (Add #x00) ;; 0
       (Sub #x01)
       (Orr #x02)
@@ -40,19 +35,36 @@
       (Asr #x0d)
       (Lsl #x0e)))
 
+(type ALUOp (enum
+      (Add)
+      (Sub)
+      (Orr)
+      (OrrNot)
+      (And)
+      (AndNot)
+      (Eor)
+      (EorNot)
+      (SubS)
+      (SDiv)
+      (UDiv)
+      (RotR)
+      (Lsr)
+      (Asr)
+      (Lsl)))
+
 (decl alu_rrr_shift (ALUOp Type Reg Reg ShiftOpAndAmt) Reg)
 (extern constructor alu_rrr_shift alu_rrr_shift)
 
 ;; BROKEN: swapped shl shr
 (spec (add_shift ty a b shift)
-  (provide 
+  (provide
     (= result (if (<= ty 32)
-      (conv_to 64 (bvadd (extract 31 0 a) 
+      (conv_to 64 (bvadd (extract 31 0 a)
       (switch (extract 15 8 shift)
         ((ALUOp.Lsr) (bvshl (extract 31 0 b) (zero_ext 32 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift)))))
         ((ALUOp.Lsl) (bvlshr (extract 31 0 b) (zero_ext 32 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift)))))
         ((ALUOp.Lsl) (bvashr (extract 31 0 b) (zero_ext 32 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift))))))))
-      (bvadd a 
+      (bvadd a
       (switch (extract 15 8 shift)
         ((ALUOp.Lsr) (bvshl b (zero_ext 64 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift)))))
         ((ALUOp.Lsl) (bvlshr b (zero_ext 64 (bvand (bvsub (int2bv 8 ty) #x01) (extract 7 0 shift)))))
