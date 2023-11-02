@@ -1,4 +1,6 @@
-(model IntCC (enum 
+(model Imm64 (type (bv 64)))
+
+(model IntCC (enum
     (Equal #x00)
     (NotEqual #x01)
     (SignedGreaterThan #x02)
@@ -10,28 +12,28 @@
     (UnsignedLessThan #x08)
     (UnsignedLessThanOrEqual #x09)))
 
-(spec (smin x y) 
+(spec (smin x y)
     (provide (= result (if (bvsle x y) x y))))
 
-(spec (umin x y) 
+(spec (umin x y)
     (provide (= result (if (bvule x y) x y))))
 
-(spec (smax x y) 
+(spec (smax x y)
     (provide (= result (if (bvsge x y) x y))))
 
-(spec (umax x y) 
+(spec (umax x y)
     (provide (= result (if (bvuge x y) x y))))
 
-(spec (iconst arg) 
+(spec (iconst arg)
     (provide (= arg (zero_ext 64 result))))
 
-(spec (null) 
+(spec (null)
     (provide (= result (conv_to (widthof result) #x0000000000000000))))
 
-(spec (bitselect c x y) 
+(spec (bitselect c x y)
     (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))))
 
-(spec (icmp c x y) 
+(spec (icmp c x y)
     (provide
         (= result
             (switch c
@@ -47,7 +49,7 @@
                 ((IntCC.UnsignedLessThanOrEqual) (if (bvule x y) #x01 #x00)))))
     (require
         ;; AVH TODO: if we understand enums semantically, we can generate this
-        (or 
+        (or
             (= c (IntCC.Equal))
             (= c (IntCC.NotEqual))
             (= c (IntCC.UnsignedGreaterThanOrEqual))
@@ -59,107 +61,107 @@
             (= c (IntCC.SignedLessThanOrEqual))
             (= c (IntCC.SignedLessThan)))))
 
-(spec (iadd x y) 
+(spec (iadd x y)
     (provide (= result (bvadd x y))))
 
-(spec (isub x y) 
+(spec (isub x y)
     (provide (= result (bvsub x y))))
 
-(spec (ineg x) 
+(spec (ineg x)
     (provide (= result (bvneg x))))
 
-(spec (iabs x) 
-    (provide (= result 
-                (if (bvsge x (conv_to (widthof x) #x0000000000000000)) 
-                    x 
+(spec (iabs x)
+    (provide (= result
+                (if (bvsge x (conv_to (widthof x) #x0000000000000000))
+                    x
                     (bvneg x)))))
 
-(spec (imul x y) 
+(spec (imul x y)
     (provide (= result (bvmul x y))))
 
-(spec (udiv x y) 
+(spec (udiv x y)
     (provide (= result (bvudiv x y)))
     (require (not (= y (zero_ext (widthof y) #b0)))))
 
-(spec (sdiv x y) 
+(spec (sdiv x y)
     (provide (= result (bvsdiv x y)))
     (require (not (= y (zero_ext (widthof y) #b0)))))
 
-(spec (urem x y) 
+(spec (urem x y)
     (provide (= result (bvurem x y)))
     (require (not (= y (zero_ext (widthof y) #b0)))))
 
-(spec (srem x y) 
+(spec (srem x y)
     (provide (= result (bvsrem x y)))
     (require (not (= y (zero_ext (widthof y) #b0)))))
 
-(spec (imul_imm x y) 
+(spec (imul_imm x y)
     (provide (= result (bvmul (sign_ext 64 x) y))))
 
-(spec (band x y) 
+(spec (band x y)
     (provide (= result (bvand x y))))
 
-(spec (bor x y) 
+(spec (bor x y)
     (provide (= result (bvor x y))))
 
-(spec (bxor x y) 
+(spec (bxor x y)
     (provide (= result (bvxor x y))))
 
-(spec (bnot x) 
+(spec (bnot x)
     (provide (= result (bvnot x)))
     (require (or (= (widthof x) 8) (= (widthof x) 16) (= (widthof x) 32) (= (widthof x) 64))))
 
-(spec (band_not x y) 
+(spec (band_not x y)
     (provide (= result (bvand x (bvnot y)))))
 
-(spec (rotl x y) 
+(spec (rotl x y)
     (provide (= result (rotl x y))))
 
-(spec (rotr x y) 
+(spec (rotr x y)
     (provide (= result (rotr x y))))
 
 ;; fn shift_mask(&mut self, ty: Type) -> ImmLogic {
 ;;     let mask = (ty.lane_bits() - 1) as u64;
 ;;     ImmLogic::maybe_from_u64(mask, I32).unwrap()
 ;; }
-(spec (ishl x y) 
-    (provide 
-        (= result 
-           (bvshl x 
-                  (bvand (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) 
+(spec (ishl x y)
+    (provide
+        (= result
+           (bvshl x
+                  (bvand (conv_to (widthof y) (bvsub (int2bv 64 (widthof y))
                                                      #x0000000000000001))
                          y)))))
 
-(spec (ushr x y) 
-    (provide 
-        (= result 
-           (bvlshr x 
-                  (bvand (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) 
+(spec (ushr x y)
+    (provide
+        (= result
+           (bvlshr x
+                  (bvand (conv_to (widthof y) (bvsub (int2bv 64 (widthof y))
                                                      #x0000000000000001))
                          y)))))
 
-(spec (sshr x y) 
-    (provide 
-        (= result 
-           (bvashr x 
-                  (bvand (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) 
+(spec (sshr x y)
+    (provide
+        (= result
+           (bvashr x
+                  (bvand (conv_to (widthof y) (bvsub (int2bv 64 (widthof y))
                                                      #x0000000000000001))
                          y)))))
 
-(spec (clz x) 
+(spec (clz x)
     (provide (= result (clz x))))
 
-(spec (cls x) 
+(spec (cls x)
     (provide (= result (cls x))))
 
-(spec (ctz x) 
+(spec (ctz x)
     (provide (= result (clz (rev x)))))
 
-(spec (popcnt x) 
+(spec (popcnt x)
     (provide (= result (popcnt x))))
 
-(spec (uextend x) 
+(spec (uextend x)
     (provide (= result (zero_ext (widthof result) x))))
 
-(spec (sextend x) 
+(spec (sextend x)
     (provide (= result (sign_ext (widthof result) x))))

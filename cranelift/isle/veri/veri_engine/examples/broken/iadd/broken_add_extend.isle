@@ -12,6 +12,7 @@
 ))
 
 ;; Helper type to represent a value and an extend operation fused together.
+(model ExtendedValue (type (bv 67)))
 (type ExtendedValue extern (enum))
 
 ;; We represent ExtendedValue as a bv

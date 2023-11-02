@@ -5,8 +5,8 @@
   (enum
 ))
 
-;; We will represent this with a msb shift bit
-;; and a 12 bit value
+;; Imm12 modeled as the range of intermediates it can represent.
+(model Imm12 (type (bv 24)))
 (type Imm12 (primitive Imm12))
 
 (type ALUOp
@@ -15,9 +15,9 @@
 ))
 
 (spec (sub_imm ty a b)
-  (provide 
-    (= result 
-       (if (<= ty 32) 
+  (provide
+    (= result
+       (if (<= ty 32)
            (conv_to 64 (bvsub (extract 31 0 a) (zero_ext 32 b)))
            (bvsub a (zero_ext 64 b)))))
   (require (or (bvult (zero_ext 64 b) #x0000000000000fff)

@@ -1,13 +1,10 @@
 use cranelift_isle::ast;
 use std::collections::HashMap;
+use veri_ir::annotation_ir;
 
-use cranelift_isle::ast::Defs;
-use cranelift_isle::ast::Ident;
-use cranelift_isle::ast::Model;
-use cranelift_isle::ast::SpecExpr;
-use cranelift_isle::ast::SpecOp;
+use cranelift_isle::ast::{Defs, Ident, Model, ModelType, SpecExpr, SpecOp};
 use cranelift_isle::lexer::Pos;
-use cranelift_isle::sema::{TermEnv, TermId, TypeEnv};
+use cranelift_isle::sema::{TermEnv, TermId, TypeEnv, TypeId};
 use veri_ir::annotation_ir::Width;
 use veri_ir::annotation_ir::{BoundVar, Const, Expr, TermAnnotation, TermSignature, Type};
 
@@ -22,15 +19,13 @@ pub struct ParsingEnv<'a> {
 #[derive(Clone, Debug)]
 pub struct AnnotationEnv {
     pub annotation_map: HashMap<TermId, TermAnnotation>,
+
+    // Mapping from ISLE type to its model (the annotation used to represent
+    // it).
+    pub model_map: HashMap<TypeId, annotation_ir::Type>,
 }
 
 impl AnnotationEnv {
-    pub fn new(annotation_env: HashMap<TermId, TermAnnotation>) -> Self {
-        AnnotationEnv {
-            annotation_map: annotation_env,
-        }
-    }
-
     pub fn get_annotation_for_term(&self, term_id: &TermId) -> Option<TermAnnotation> {
         if self.annotation_map.contains_key(term_id) {
             return Some(self.annotation_map[term_id].clone());
@@ -300,6 +295,7 @@ fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
 }
 
 pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> AnnotationEnv {
+    let mut model_map = HashMap::new();
     let mut annotation_map = HashMap::new();
 
     let mut env = ParsingEnv {
@@ -310,44 +306,50 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
     // Traverse models to process spec annotations for enums
     for def in &defs.defs {
         match def {
-            &ast::Def::Model(Model { ref name, ref val }) => {
-                match val {
-                    ast::ModelValue::TypeValue(_) => {
-                        // AVH todo, skipping for now
-                        ()
-                    }
-                    ast::ModelValue::EnumValues(vals) => {
-                        for (v, e) in vals {
-                            let ident = ast::Ident(format!("{}.{}", name.0, v.0), v.1);
-                            let term_id = termenv.get_term_by_name(typeenv, &ident).unwrap();
-                            let val = spec_to_expr(e, &env);
-                            let ty = match val {
-                                Expr::Const(Const { ref ty, .. }, _) => ty,
-                                _ => unreachable!(),
-                            };
-                            env.enums.insert(ident.0.clone(), val.clone());
-                            let result = BoundVar {
-                                name: RESULT.to_string(),
-                                ty: Some(ty.clone()),
-                            };
-                            let sig = TermSignature {
-                                args: vec![],
-                                ret: result,
-                            };
-                            let annotation = TermAnnotation {
-                                sig,
-                                assumptions: vec![Box::new(Expr::Eq(
-                                    Box::new(Expr::Var(RESULT.to_string(), 0)),
-                                    Box::new(val),
-                                    0,
-                                ))],
-                                assertions: vec![],
-                            };
-                            annotation_map.insert(term_id, annotation);
+            &ast::Def::Model(Model { ref name, ref val }) => match val {
+                ast::ModelValue::TypeValue(model_type) => {
+                    let type_id = typeenv.get_type_by_name(&name).unwrap();
+                    let ir_type = match model_type {
+                        ModelType::Int => annotation_ir::Type::Int,
+                        ModelType::Bool => annotation_ir::Type::Bool,
+                        ModelType::BitVec(None) => annotation_ir::Type::BitVector,
+                        ModelType::BitVec(Some(size)) => {
+                            annotation_ir::Type::BitVectorWithWidth(*size)
                         }
+                    };
+                    model_map.insert(type_id, ir_type);
+                }
+                ast::ModelValue::EnumValues(vals) => {
+                    for (v, e) in vals {
+                        let ident = ast::Ident(format!("{}.{}", name.0, v.0), v.1);
+                        let term_id = termenv.get_term_by_name(typeenv, &ident).unwrap();
+                        let val = spec_to_expr(e, &env);
+                        let ty = match val {
+                            Expr::Const(Const { ref ty, .. }, _) => ty,
+                            _ => unreachable!(),
+                        };
+                        env.enums.insert(ident.0.clone(), val.clone());
+                        let result = BoundVar {
+                            name: RESULT.to_string(),
+                            ty: Some(ty.clone()),
+                        };
+                        let sig = TermSignature {
+                            args: vec![],
+                            ret: result,
+                        };
+                        let annotation = TermAnnotation {
+                            sig,
+                            assumptions: vec![Box::new(Expr::Eq(
+                                Box::new(Expr::Var(RESULT.to_string(), 0)),
+                                Box::new(val),
+                                0,
+                            ))],
+                            assertions: vec![],
+                        };
+                        annotation_map.insert(term_id, annotation);
                     }
                 }
-            }
+            },
             _ => (),
         }
     }
@@ -390,5 +392,8 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
             _ => {}
         }
     }
-    AnnotationEnv { annotation_map }
+    AnnotationEnv {
+        model_map,
+        annotation_map,
+    }
 }

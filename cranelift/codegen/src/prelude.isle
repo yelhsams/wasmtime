@@ -30,7 +30,7 @@
 (type u64 (primitive u64))
 (type u128 (primitive u128))
 
-(model usize (type (bv 64)))
+(model usize (type (bv)))
 (type usize (primitive usize))
 
 (type i8 (primitive i8))
@@ -41,7 +41,9 @@
 (type isize (primitive isize))
 
 ;; `cranelift-entity`-based identifiers.
+(model Type (type Int))
 (type Type (primitive Type))
+(model Value (type (bv)))
 (type Value (primitive Value))
 (type ValueList (primitive ValueList))
 (type BlockCall (primitive BlockCall))

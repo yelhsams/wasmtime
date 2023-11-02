@@ -1370,64 +1370,10 @@ fn add_annotation_constraints(
 fn add_isle_constraints(
     term: &isle::sema::Term,
     tree: &mut RuleParseTree,
-    typeenv: &TypeEnv,
+    annotation_env: &AnnotationEnv,
     annotation_info: &mut AnnotationTypeInfo,
     annotation: annotation_ir::TermSignature,
 ) {
-    let clif_to_ir_types = HashMap::from([
-        ("Type".to_owned(), annotation_ir::Type::Int),
-        (
-            "Imm12".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(24),
-        ),
-        (
-            "Imm64".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(64),
-        ),
-        (
-            "ImmShift".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(6),
-        ),
-        (
-            "ImmLogic".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(64),
-        ),
-        (
-            "u64".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(64),
-        ),
-        ("u8".to_owned(), annotation_ir::Type::BitVectorWithWidth(8)),
-        ("usize".to_owned(), annotation_ir::Type::BitVector),
-        ("bool".to_owned(), annotation_ir::Type::Bool),
-        (
-            "MoveWideConst".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(16),
-        ),
-        ("OperandSize".to_owned(), annotation_ir::Type::Int),
-        ("Reg".to_owned(), annotation_ir::Type::BitVector),
-        (
-            "IntCC".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(8),
-        ),
-        ("Inst".to_owned(), annotation_ir::Type::BitVector),
-        ("Amode".to_owned(), annotation_ir::Type::BitVector),
-        ("Value".to_owned(), annotation_ir::Type::BitVector),
-        (
-            "ExtendedValue".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(67),
-        ),
-        ("ValueRegs".to_owned(), annotation_ir::Type::BitVector),
-        ("InstOutput".to_owned(), annotation_ir::Type::BitVector),
-        (
-            "ImmExtend".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(1),
-        ),
-        (
-            "ShiftOpAndAmt".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(16),
-        ),
-    ]);
-
     let mut annotation_vars = vec![];
     for a in annotation.args {
         annotation_vars.push(a.name);
@@ -1455,8 +1401,7 @@ fn add_isle_constraints(
                 .insert(annotation_var.clone(), type_var);
         }
 
-        let isle_type_name = typeenv.types[isle_type_id.index()].name(typeenv);
-        if let Some(ir_type) = clif_to_ir_types.get(isle_type_name) {
+        if let Some(ir_type) = annotation_env.model_map.get(isle_type_id) {
             let type_var = annotation_info.var_to_type_var[&annotation_var];
             match ir_type {
                 annotation_ir::Type::BitVector => tree
@@ -1612,7 +1557,7 @@ fn add_rule_constraints(
                 add_isle_constraints(
                     term,
                     tree,
-                    typeenv,
+                    annotation_env,
                     &mut annotation_info,
                     annotation.sig.clone(),
                 );
@@ -1624,7 +1569,7 @@ fn add_rule_constraints(
                 add_isle_constraints(
                     term,
                     tree,
-                    typeenv,
+                    annotation_env,
                     &mut annotation_info,
                     annotation.sig.clone(),
                 );
