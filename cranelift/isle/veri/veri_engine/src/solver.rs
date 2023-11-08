@@ -80,10 +80,13 @@ impl SolverCtx {
     }
 
     /// Construct a constant bit-vector value of the given width. (This is used so pervasively that
-    /// perhaps we should submit it for inclusion in the easy_smt library...) (Also, this is
-    /// generic because we use it with several integer types, but it probably shouldn't be *this*
-    /// generic.)
-    fn bv<T: std::fmt::Display>(&self, value: T, width: usize) -> SExpr {
+    /// perhaps we should submit it for inclusion in the easy_smt library...)
+    fn bv(&self, value: i128, width: usize) -> SExpr {
+        if value < 0 {
+            return self
+                .smt
+                .list(vec![self.smt.atom("bvneg"), self.bv(-value, width)]);
+        }
         self.smt.list(vec![
             self.smt.atoms().und,
             self.smt.atom(format!("bv{}", value)),
@@ -287,7 +290,7 @@ impl SolverCtx {
         // SMT bitvector rotate_left requires that the rotate amount be
         // statically specified. Instead, to use a dynamic amount, desugar
         // to shifts and bit arithmetic.
-        let width_as_bv = self.bv(width, width);
+        let width_as_bv = self.bv(width.try_into().unwrap(), width);
         let wrapped_amount = self.smt.bvurem(amount, width_as_bv);
         let wrapped_delta = self.smt.bvsub(width_as_bv, wrapped_amount);
         match op {
@@ -717,7 +720,8 @@ impl SolverCtx {
                             );
                             let ys = self.zero_extend(self.bitwidth - y_static_width, extract);
                             let arg_width_as_bv = self.int2bv(self.bitwidth, arg_width);
-                            let bitwidth_as_bv = self.bv(self.bitwidth, self.bitwidth);
+                            let bitwidth_as_bv =
+                                self.bv(self.bitwidth.try_into().unwrap(), self.bitwidth);
                             let extra_shift = self.smt.bvsub(bitwidth_as_bv, arg_width_as_bv);
                             let shl_to_zero = self.smt.bvshl(xs, extra_shift);
 
@@ -752,7 +756,8 @@ impl SolverCtx {
                             let ysext = self.zero_extend(self.bitwidth - y_static_width, extract);
 
                             let arg_width_as_bv = self.int2bv(self.bitwidth, arg_width);
-                            let bitwidth_as_bv = self.bv(self.bitwidth, self.bitwidth);
+                            let bitwidth_as_bv =
+                                self.bv(self.bitwidth.try_into().unwrap(), self.bitwidth);
                             let extra_shift = self.smt.bvsub(bitwidth_as_bv, arg_width_as_bv);
                             let shl_to_zero = self.smt.bvshl(xs, extra_shift);
 
