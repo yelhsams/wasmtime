@@ -23,8 +23,9 @@ pub enum Bitwidth {
 
 pub enum TestResult {
     Simple(Vec<(Bitwidth, VerificationResult)>),
-    MultiType(Vec<(TermSignature, VerificationResult)>),
+    Expect(fn(&TermSignature) -> VerificationResult),
 }
+
 type TestResultBuilder = dyn Fn(Bitwidth) -> (Bitwidth, VerificationResult);
 
 // Some examples of functions we might need
@@ -115,6 +116,10 @@ fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) ->
     let (typeenv, termenv) = create_envs(&defs).unwrap();
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
+    let term_signatures = isle_inst_types()
+        .get(config.term.as_str())
+        .expect(format!("Missing term width for {}", config.term).as_str())
+        .clone();
     let instantiations = match tr {
         TestResult::Simple(s) => {
             let mut res = vec![];
@@ -125,12 +130,8 @@ fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) ->
                     Bitwidth::I32 => veri_ir::Type::BitVector(Some(32)),
                     Bitwidth::I64 => veri_ir::Type::BitVector(Some(64)),
                 };
-                let types = isle_inst_types()
-                    .get(config.term.as_str())
-                    .expect(format!("Missing term width for {}", config.term).as_str())
-                    .clone();
                 // Find the type instantiations with this as the canonical type
-                let all_instantiations: Vec<&TermSignature> = types
+                let all_instantiations: Vec<&TermSignature> = term_signatures
                     .iter()
                     .filter(|sig| sig.canonical_type.unwrap() == ty)
                     .collect();
@@ -143,7 +144,10 @@ fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) ->
             }
             res
         }
-        TestResult::MultiType(c) => c,
+        TestResult::Expect(expect) => term_signatures
+            .iter()
+            .map(|sig| (sig.clone(), expect(sig)))
+            .collect(),
     };
 
     for (type_instantiation, expected_result) in instantiations {

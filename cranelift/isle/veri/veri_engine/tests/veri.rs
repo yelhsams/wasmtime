@@ -7,9 +7,8 @@ use utils::{
     test_from_file_with_lhs_termname_simple, test_x64_rule_with_lhs_termname_simple, Bitwidth,
     TestResult,
 };
-use veri_engine_lib::widths::isle_inst_types;
 use veri_engine_lib::Config;
-use veri_ir::{ConcreteInput, ConcreteTest, Counterexample, TermSignature, VerificationResult};
+use veri_ir::{ConcreteInput, ConcreteTest, Counterexample, VerificationResult};
 
 #[test]
 fn test_named_iadd_base_concrete() {
@@ -1101,27 +1100,19 @@ fn test_named_sextend() {
 
 #[test]
 fn test_broken_uextend() {
-    // In the spec for extend, zero_extend and sign_extend are swapped.
-    // However, this should still succeed if the input and output
-    // widths are the same
-    let instantiations: Vec<(TermSignature, VerificationResult)> = isle_inst_types()
-        .get(&"uextend")
-        .unwrap()
-        .iter()
-        .map(|sig| {
-            let expected = if sig.args[0] == sig.ret {
-                VerificationResult::Success
-            } else {
-                VerificationResult::Failure(Counterexample {})
-            };
-            (sig.clone(), expected)
-        })
-        .collect();
-
     test_from_file_with_lhs_termname(
         "./examples/broken/broken_uextend.isle",
         "uextend".to_string(),
-        TestResult::MultiType(instantiations),
+        TestResult::Expect(|sig| {
+            // In the spec for extend, zero_extend and sign_extend are swapped.
+            // However, this should still succeed if the input and output
+            // widths are the same
+            if sig.args[0] == sig.ret {
+                VerificationResult::Success
+            } else {
+                VerificationResult::Failure(Counterexample {})
+            }
+        }),
     );
 }
 
