@@ -6,9 +6,15 @@
 (extern const $true bool)
 
 (spec (simplify x) (provide (= x result)))
+(instantiate simplify
+    ((args (bv 8)) (ret (bv 8)) (canon (bv 8)))
+    ((args (bv 16)) (ret (bv 16)) (canon (bv 16)))
+    ((args (bv 32)) (ret (bv 32)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
 (decl simplify (Value) Value)
 
-(spec (bor ty x y) 
+(spec (bor ty x y)
     (provide (= (bvor x y) result))
     (require
         (= ty (widthof x))
@@ -24,7 +30,7 @@
 (extern extractor bnot bnot)
 (extern constructor bnot bnot)
 
-(spec (band ty x y) 
+(spec (band ty x y)
     (provide (= (bvand x y) result))
     (require
         (= ty (widthof x))
@@ -46,7 +52,7 @@
 (decl u64_from_imm64 (u64) Imm64)
 (extern extractor u64_from_imm64 u64_from_imm64)
 
-(spec (u64_eq x y) 
+(spec (u64_eq x y)
       (provide (= result (if (= x y) #x0000000000000000 #x0000000000000001))))
 (decl pure u64_eq (u64 u64) u64)
 (extern constructor u64_eq u64_eq)

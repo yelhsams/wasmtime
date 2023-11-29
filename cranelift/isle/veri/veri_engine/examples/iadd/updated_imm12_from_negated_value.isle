@@ -27,6 +27,12 @@
                     (and (bvult (bvneg (sign_ext 64 arg)) #x0000000000fff000)
                         (= (extract 2 0 (bvneg (sign_ext 64 arg))) #b000)))
                 (= result (extract 23 0 (bvneg (sign_ext 64 arg))))))
+(instantiate imm12_from_negated_value
+    ((args (bv 8)) (ret (bv 24)) (canon (bv 8)))
+    ((args (bv 16)) (ret (bv 24)) (canon (bv 16)))
+    ((args (bv 32)) (ret (bv 24)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 24)) (canon (bv 64)))
+)
 (decl pure partial imm12_from_negated_value (Value) Imm12)
  (rule
    (imm12_from_negated_value (has_type ty (iconst n)))

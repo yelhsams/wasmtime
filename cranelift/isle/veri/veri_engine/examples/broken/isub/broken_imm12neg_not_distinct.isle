@@ -35,6 +35,12 @@
                     (and (bvult (bvneg (zero_ext 64 result)) #x0000000000fff000)
                         (= (extract 2 0 (bvneg (zero_ext 64 result))) #b000)))
                 (= result (conv_to (widthof result) (bvneg (zero_ext 64 arg))))))
+(instantiate imm12_from_negated_value
+    ((args (bv 8)) (ret (bv 24)) (canon (bv 8)))
+    ((args (bv 16)) (ret (bv 24)) (canon (bv 16)))
+    ((args (bv 32)) (ret (bv 24)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 24)) (canon (bv 64)))
+)
 (decl imm12_from_negated_value (Imm12) Value)
 (extern extractor imm12_from_negated_value imm12_from_negated_value)
 

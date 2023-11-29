@@ -3,7 +3,7 @@
   (enum
 ))
 
-(model ALUOp (enum 
+(model ALUOp (enum
       (Add #x00) ;; 0
       (Sub #x01)
       (Orr #x02)
@@ -61,39 +61,45 @@
 
 ;; BROKEN: no restriction on op in annotation
  (spec (do_shift op t a b)
-   (provide 
-     (= result 
-        (switch op 
+   (provide
+     (= result
+        (switch op
           ((ALUOp.Lsr) (conv_to 64
-            (bvlshr (conv_to t a) 
+            (bvlshr (conv_to t a)
                  (conv_to t (zero_ext 64
                    (bvand (conv_to (widthof b) (bvsub (int2bv 64 (widthof b)) #x0000000000000001)) b))))))
           ((ALUOp.Asr) (conv_to 64
-            (bvashr (conv_to t a) 
+            (bvashr (conv_to t a)
                   (conv_to t (zero_ext 64
                     (bvand (conv_to (widthof b) (bvsub (int2bv 64 (widthof b)) #x0000000000000001)) b))))))
           ((ALUOp.Lsl) (conv_to 64
-            (bvshl (conv_to t a) 
+            (bvshl (conv_to t a)
                  (conv_to t (zero_ext 64
                    (bvand (conv_to (widthof b) (bvsub (int2bv 64 (widthof b)) #x0000000000000001)) b)))))))))
    (require
      (= t (widthof b))
      (or (= t 8) (= t 16) (= t 32) (= t 64))))
+(instantiate do_shift
+    ((args (bv 8) Int (bv 64) (bv 8)) (ret (bv 64)) (canon (bv 8)))
+    ((args (bv 8) Int (bv 64) (bv 16)) (ret (bv 64)) (canon (bv 16)))
+    ((args (bv 8) Int (bv 64) (bv 32)) (ret (bv 64)) (canon (bv 32)))
+    ((args (bv 8) Int (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
 (decl do_shift (ALUOp Type Reg Value) Reg)
 
 (spec (alu_rrr op t a b)
-    (provide 
+    (provide
       (= result (switch op
               ((ALUOp.Lsr)
-                (if (<= t 32) 
+                (if (<= t 32)
                     (conv_to 64 (bvlshr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
                     (bvlshr a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
-              ((ALUOp.Asr) 
-                (if (<= t 32) 
+              ((ALUOp.Asr)
+                (if (<= t 32)
                     (conv_to 64 (bvashr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
                     (bvashr a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
               ((ALUOp.Lsl)
-                (if (<= t 32) 
+                (if (<= t 32)
                     (conv_to 64 (bvshl (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
                     (bvshl a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b)))))))
     (require

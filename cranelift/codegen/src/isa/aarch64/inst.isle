@@ -1246,6 +1246,12 @@
             (= result (if (<= ty 32) 32 64)))
       (require
             (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
+(instantiate operand_size
+    ((args Int) (ret Int) (canon (bv 8)))
+    ((args Int) (ret Int) (canon (bv 16)))
+    ((args Int) (ret Int) (canon (bv 32)))
+    ((args Int) (ret Int) (canon (bv 64)))
+)
 (decl operand_size (Type) OperandSize)
 (rule operand_size_32 1 (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
 (rule operand_size_64 (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
@@ -1878,6 +1884,12 @@
                     (and (bvult (bvneg (sign_ext 64 arg)) #x0000000000fff000)
                         (= (extract 2 0 (bvneg (sign_ext 64 arg))) #b000)))
                 (= result (extract 23 0 (bvneg (sign_ext 64 arg))))))
+(instantiate imm12_from_negated_value
+    ((args (bv 8)) (ret (bv 24)) (canon (bv 8)))
+    ((args (bv 16)) (ret (bv 24)) (canon (bv 16)))
+    ((args (bv 32)) (ret (bv 24)) (canon (bv 32)))
+    ((args (bv 64)) (ret (bv 24)) (canon (bv 64)))
+)
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule imm12_from_negated_value
   (imm12_from_negated_value (has_type ty (iconst n)))
@@ -3433,6 +3445,12 @@
          (32 (if (= ext #b1) (zero_ext 64 (extract 32 0 x)) (sign_ext 64 (extract 32 0 x))))
          (64 x))))
   (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
+(instantiate imm
+    ((args Int (bv 64)) (ret (bv 64)) (canon (bv 8)))
+    ((args Int (bv 64)) (ret (bv 64)) (canon (bv 16)))
+    ((args Int (bv 64)) (ret (bv 64)) (canon (bv 32)))
+    ((args Int (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
 (decl imm (Type ImmExtend u64) Reg)
 
 ;; Move wide immediate instructions; to simplify, we only match when we
@@ -4459,6 +4477,12 @@
                 (= in_ty 64))
             (= in_ty (widthof x))
             (= in_ty (widthof y))))
+(instantiate lower_icmp
+    ((args (bv 8) (bv 8) (bv 8) Int) (ret (bv 12)) (canon (bv 8)))
+    ((args (bv 8) (bv 16) (bv 16) Int) (ret (bv 12)) (canon (bv 16)))
+    ((args (bv 8) (bv 32) (bv 32) Int) (ret (bv 12)) (canon (bv 32)))
+    ((args (bv 8) (bv 64) (bv 64) Int) (ret (bv 12)) (canon (bv 64)))
+)
 (decl lower_icmp (IntCC Value Value Type) FlagsAndCC)
 
 (spec (lower_icmp_into_reg c x y in_ty out_ty)
@@ -4494,6 +4518,12 @@
             (= in_ty (widthof x))
             (= in_ty (widthof y))
             (= out_ty 8)))
+(instantiate lower_icmp_into_reg
+    ((args (bv 8) (bv 8) (bv 8) Int Int) (ret (bv 8)) (canon (bv 8)))
+    ((args (bv 8) (bv 16) (bv 16) Int Int) (ret (bv 8)) (canon (bv 16)))
+    ((args (bv 8) (bv 32) (bv 32) Int Int) (ret (bv 8)) (canon (bv 32)))
+    ((args (bv 8) (bv 64) (bv 64) Int Int) (ret (bv 8)) (canon (bv 64)))
+)
 (decl lower_icmp_into_reg (IntCC Value Value Type Type) ValueRegs)
 (decl lower_icmp_into_flags (IntCC Value Value Type) FlagsAndCC)
 
@@ -4515,6 +4545,12 @@
     (bvule c #x09)
     (or (= in_ty 32) (= in_ty 64))
     (= in_ty (widthof x))))
+(instantiate lower_icmp_const
+    ((args (bv 8) (bv 8) (bv 64) Int) (ret (bv 12)) (canon (bv 8)))
+    ((args (bv 8) (bv 16) (bv 64) Int) (ret (bv 12)) (canon (bv 16)))
+    ((args (bv 8) (bv 32) (bv 64) Int) (ret (bv 12)) (canon (bv 32)))
+    ((args (bv 8) (bv 64) (bv 64) Int) (ret (bv 12)) (canon (bv 64)))
+)
 (decl lower_icmp_const (IntCC Value u64 Type) FlagsAndCC)
 ;; For most cases, `lower_icmp_into_flags` is the same as `lower_icmp`,
 ;; except for some I128 cases (see below).

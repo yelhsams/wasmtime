@@ -1,5 +1,4 @@
 use crate::type_inference::type_rules_with_term_and_types;
-use crate::widths::isle_inst_types;
 use crate::Config;
 use cranelift_isle as isle;
 use isle::compile::create_envs;
@@ -26,7 +25,8 @@ pub fn verify_rules(inputs: Vec<PathBuf>, config: &Config) {
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
     // Get the types/widths for this particular term
-    let types = isle_inst_types()
+    let types = annotation_env
+        .get_term_signatures_by_name(&termenv, &typeenv)
         .get(&config.term as &str)
         .expect(format!("Missing term width for {}", config.term).as_str())
         .clone();

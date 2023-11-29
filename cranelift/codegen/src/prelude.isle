@@ -696,3 +696,29 @@
 
 (convert Offset32 i32 offset32_to_i32)
 (convert i32 Offset32 i32_to_offset32)
+
+;;;; Common Term Signatures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(form
+  bv_unary_8_to_64
+  ((args (bv  8)) (ret (bv  8)) (canon (bv  8)))
+  ((args (bv 16)) (ret (bv 16)) (canon (bv 16)))
+  ((args (bv 32)) (ret (bv 32)) (canon (bv 32)))
+  ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+
+(form
+  bv_binary_8_to_64
+  ((args (bv  8) (bv  8)) (ret (bv  8)) (canon (bv  8)))
+  ((args (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
+  ((args (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
+  ((args (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+
+(form
+  bv_ternary_8_to_64
+  ((args (bv  8) (bv  8) (bv  8)) (ret (bv  8)) (canon (bv  8)))
+  ((args (bv 16) (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
+  ((args (bv 32) (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
+  ((args (bv 64) (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)

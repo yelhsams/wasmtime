@@ -24,6 +24,8 @@ pub enum Def {
     Decl(Decl),
     Spec(Spec),
     Model(Model),
+    Form(Form),
+    Instantiation(Instantiation),
     Extern(Extern),
     Converter(Converter),
 }
@@ -244,6 +246,29 @@ pub struct Model {
     pub name: Ident,
     /// The value of the type or enum (potentially multiple values)
     pub val: ModelValue,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Signature {
+    pub args: Vec<ModelType>,
+    pub ret: ModelType,
+    pub canonical: ModelType,
+    pub pos: Pos,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Form {
+    pub name: Ident,
+    pub signatures: Vec<Signature>,
+    pub pos: Pos,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Instantiation {
+    pub term: Ident,
+    pub form: Option<Ident>,
+    pub signatures: Vec<Signature>,
+    pub pos: Pos,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

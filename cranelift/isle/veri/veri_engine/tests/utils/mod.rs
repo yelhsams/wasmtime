@@ -8,7 +8,6 @@ use veri_engine_lib::annotations::parse_annotations;
 use veri_engine_lib::build_clif_lower_isle;
 use veri_engine_lib::type_inference::type_rules_with_term_and_types;
 use veri_engine_lib::verify::verify_rules_for_term;
-use veri_engine_lib::widths::isle_inst_types;
 use veri_engine_lib::Config;
 use veri_ir::{ConcreteTest, Counterexample, TermSignature, VerificationResult};
 
@@ -116,7 +115,8 @@ fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) ->
     let (typeenv, termenv) = create_envs(&defs).unwrap();
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
 
-    let term_signatures = isle_inst_types()
+    let term_signatures = annotation_env
+        .get_term_signatures_by_name(&termenv, &typeenv)
         .get(config.term.as_str())
         .expect(format!("Missing term width for {}", config.term).as_str())
         .clone();

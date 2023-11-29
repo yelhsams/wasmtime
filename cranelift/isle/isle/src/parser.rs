@@ -171,6 +171,8 @@ impl<'a> Parser<'a> {
             "decl" => Def::Decl(self.parse_decl()?),
             "spec" => Def::Spec(self.parse_spec()?),
             "model" => Def::Model(self.parse_model()?),
+            "form" => Def::Form(self.parse_form()?),
+            "instantiate" => Def::Instantiation(self.parse_instantiation()?),
             "rule" => Def::Rule(self.parse_rule()?),
             "extractor" => Def::Extractor(self.parse_etor()?),
             "extern" => Def::Extern(self.parse_extern()?),
@@ -623,6 +625,93 @@ impl<'a> Parser<'a> {
                 pos,
                 "Model type be a Bool, Int, or BitVector (bv ...)".to_string(),
             ))
+        }
+    }
+
+    fn parse_form(&mut self) -> Result<Form> {
+        let pos = self.pos();
+        let name = self.parse_ident()?;
+        let signatures = self.parse_signatures()?;
+        Ok(Form {
+            name,
+            signatures,
+            pos,
+        })
+    }
+
+    fn parse_signatures(&mut self) -> Result<Vec<Signature>> {
+        let mut signatures = vec![];
+        while !self.is_rparen() {
+            signatures.push(self.parse_signature()?);
+        }
+        Ok(signatures)
+    }
+
+    fn parse_signature(&mut self) -> Result<Signature> {
+        self.expect_lparen()?;
+        let pos = self.pos();
+        let args = self.parse_tagged_types("args")?;
+        let ret = self.parse_tagged_type("ret")?;
+        let canonical = self.parse_tagged_type("canon")?;
+        self.expect_rparen()?;
+        Ok(Signature {
+            args,
+            ret,
+            canonical,
+            pos,
+        })
+    }
+
+    fn parse_tagged_types(&mut self, tag: &str) -> Result<Vec<ModelType>> {
+        self.expect_lparen()?;
+        let pos = self.pos();
+        if !self.eat_sym_str(tag)? {
+            return Err(self.error(
+                pos,
+                format!("Invalid {}: expected ({} <arg> ...)", tag, tag),
+            ));
+        };
+        let mut params = vec![];
+        while !self.is_rparen() {
+            params.push(self.parse_model_type()?);
+        }
+        self.expect_rparen()?;
+        Ok(params)
+    }
+
+    fn parse_tagged_type(&mut self, tag: &str) -> Result<ModelType> {
+        self.expect_lparen()?;
+        let pos = self.pos();
+        if !self.eat_sym_str(tag)? {
+            return Err(self.error(pos, format!("Invalid {}: expected ({} <arg>)", tag, tag)));
+        };
+        let ty = self.parse_model_type()?;
+        self.expect_rparen()?;
+        Ok(ty)
+    }
+
+    fn parse_instantiation(&mut self) -> Result<Instantiation> {
+        let pos = self.pos();
+        let term = self.parse_ident()?;
+        // Instantiation either has an explicit signatures list, which would
+        // open with a left paren. Or it has an identifier referencing a
+        // predefined set of signatures.
+        if self.is_lparen() {
+            let signatures = self.parse_signatures()?;
+            Ok(Instantiation {
+                term,
+                form: None,
+                signatures,
+                pos,
+            })
+        } else {
+            let form = self.parse_ident()?;
+            Ok(Instantiation {
+                term,
+                form: Some(form),
+                signatures: vec![],
+                pos,
+            })
         }
     }
 

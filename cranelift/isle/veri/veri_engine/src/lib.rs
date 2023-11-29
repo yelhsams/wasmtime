@@ -12,7 +12,6 @@ pub mod solver;
 pub mod termname;
 pub mod type_inference;
 pub mod verify;
-pub mod widths;
 
 pub const REG_WIDTH: usize = 64;
 
