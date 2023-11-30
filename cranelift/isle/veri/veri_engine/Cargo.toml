@@ -22,6 +22,7 @@ cranelift-isle = { path = "../../isle" }
 cranelift-codegen = { path = "../../../codegen" }
 cranelift-reader = { path = "../../../reader" }
 cranelift-codegen-meta = { path = "../../../codegen/meta" }
+isla-lib = { git = "https://github.com/rems-project/isla.git" }
 anyhow = { workspace = true }
 veri_ir = { path = "../veri_ir" }
 easy-smt = { git = "https://github.com/elliottt/easy-smt.git" }
