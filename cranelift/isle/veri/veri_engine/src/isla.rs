@@ -124,15 +124,15 @@ fn trace_function<B: BV>(
     let mut solver = Solver::from_checkpoint(&solver_ctx, initial_checkpoint);
     let checkpoint = smt::checkpoint(&mut solver);
 
-    let opcode = mc[..4].try_into().expect("machine code has wrong length");
-    let opcode = Val::Bits(B::from_u32(u32::from_le_bytes(opcode)));
+    let opcode_vals = opcode_vals(mc)?;
+    print!("opcode vals = {:?}", opcode_vals);
 
     let footprint_function = "zisla_footprint";
     let function_id = shared_state.symtab.lookup(&footprint_function);
     let (args, ret_ty, instrs) = shared_state.functions.get(&function_id).unwrap();
     let memory = Memory::new();
     let task_state = TaskState::<B>::new();
-    let task = LocalFrame::new(function_id, args, ret_ty, Some(&[opcode]), instrs)
+    let task = LocalFrame::new(function_id, args, ret_ty, Some(&opcode_vals), instrs)
         .add_lets(&iarch.lets)
         .add_regs(&iarch.regs)
         .set_memory(memory)
@@ -160,7 +160,6 @@ fn trace_function<B: BV>(
 
                 let events: Vec<Event<B>> = events.drain(..).rev().collect();
                 let stdout = std::io::stdout();
-                // Traces can be large, so use a 5MB buffer
                 let mut handle = BufWriter::with_capacity(5 * usize::pow(2, 20), stdout.lock());
                 let write_opts = WriteOpts::default();
                 simplify::write_events_with_opts(&mut handle, &events, &shared_state, &write_opts)
@@ -189,6 +188,17 @@ fn trace_function<B: BV>(
     }
 
     Ok(())
+}
+
+fn opcode_vals<B: BV>(mc: &[u8]) -> anyhow::Result<Vec<Val<B>>> {
+    let mut vals = Vec::new();
+    for opcode_bytes in mc.chunks(4) {
+        let val = Val::Bits(B::from_u32(u32::from_le_bytes(
+            opcode_bytes.try_into().unwrap(),
+        )));
+        vals.push(val);
+    }
+    Ok(vals)
 }
 
 fn parse_ir<'a, 'input, B: BV>(
