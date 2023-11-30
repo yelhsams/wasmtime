@@ -13,10 +13,16 @@ path = "src/lib.rs"
 name = "veri_engine_bin"
 path = "src/main.rs"
 
+[[bin]]
+name = "isla"
+path = "src/isla.rs"
+
 [dependencies]
 cranelift-isle = { path = "../../isle" }
 cranelift-codegen = { path = "../../../codegen" }
+cranelift-reader = { path = "../../../reader" }
 cranelift-codegen-meta = { path = "../../../codegen/meta" }
+anyhow = { workspace = true }
 veri_ir = { path = "../veri_ir" }
 easy-smt = { git = "https://github.com/elliottt/easy-smt.git" }
 clap = { version = "3.0.0", features = ["derive"] }
@@ -28,3 +34,6 @@ retry = "2.0.0"
 [dev-dependencies]
 strum = "0.24.0"
 strum_macros = "0.24.0"
+
+[features]
+default = ["cranelift-codegen/all-arch", "cranelift-codegen/trace-log"]
