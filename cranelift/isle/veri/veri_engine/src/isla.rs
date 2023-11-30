@@ -4,17 +4,22 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_reader::{parse_sets_and_triple, parse_test, ParseOptions};
 use isla_lib::config::ISAConfig;
+use isla_lib::smt::Checkpoint;
+use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
-// use isla_lib::executor;
-// use isla_lib::executor::{LocalFrame, StopAction, StopConditions, TaskState};
+use crossbeam::queue::SegQueue;
 use isla_lib::bitvector::b64::B64;
 use isla_lib::bitvector::BV;
-use isla_lib::ir::{Def, IRTypeInfo, Name, Symtab};
+use isla_lib::executor::{self, LocalFrame, TaskState};
+use isla_lib::init::initialize_architecture;
+use isla_lib::ir::{AssertionMode, Def, IRTypeInfo, Name, Symtab, Val};
 use isla_lib::ir_lexer::new_ir_lexer;
 use isla_lib::ir_parser;
+use isla_lib::memory::Memory;
+use std::sync::Arc;
 
 #[derive(Parser)]
 struct Options {
@@ -29,6 +34,10 @@ struct Options {
     /// Architecture definition.
     #[clap(long)]
     arch: PathBuf,
+
+    /// ISA config file.
+    #[clap(long)]
+    isa_config: PathBuf,
 
     /// Specify an input file to be used. Use '-' for stdin.
     file: PathBuf,
@@ -55,7 +64,21 @@ fn main() -> anyhow::Result<()> {
     // Parse ISLA Architecture.
     let contents = read_to_string(&options.arch)?;
     let mut symtab = Symtab::new();
-    let arch = parse_ir::<B64>(&contents, &mut symtab)?;
+    let mut arch = parse_ir::<B64>(&contents, &mut symtab)?;
+
+    // ISLA ISA Config.
+    let mut hasher = Sha256::new();
+    let type_info = IRTypeInfo::new(&arch);
+    let isa_config = match ISAConfig::<B64>::from_file(
+        &mut hasher,
+        &options.isa_config,
+        None,
+        &symtab,
+        &type_info,
+    ) {
+        Ok(isa_config) => isa_config,
+        Err(msg) => return Err(anyhow::Error::msg(msg)),
+    };
 
     // Compile functions.
     for (func, _) in test_file.functions {
@@ -64,57 +87,61 @@ fn main() -> anyhow::Result<()> {
         let _compiled_code = context
             .compile_and_emit(isa, &mut mem, &mut Default::default())
             .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
-        trace_function(&mem, &arch);
+        trace_function(
+            &mem,
+            &mut arch,
+            symtab.clone(),
+            type_info.clone(),
+            &isa_config,
+        );
     }
 
     Ok(())
 }
 
-fn trace_function<B: BV>(mc: &[u8], arch: &Vec<Def<Name, B>>) {
-    // &mut arch,
-    // symtab,
+fn trace_function<B: BV>(
+    mc: &[u8],
+    arch: &mut Vec<Def<Name, B>>,
+    symtab: Symtab,
+    type_info: IRTypeInfo,
+    isa_config: &ISAConfig<B>,
+) {
+    let use_model_reg_init = true;
+    let iarch = initialize_architecture(
+        arch,
+        symtab,
+        type_info,
+        &isa_config,
+        AssertionMode::Optimistic,
+        use_model_reg_init,
+    );
+    let shared_state = &&iarch.shared_state;
 
-    // type_info,
-    let _type_info = IRTypeInfo::new(&arch);
+    let opcode = Val::Bits(B::from_bytes(mc));
 
-    // TODO: &isa_config,
-    // TODO: assertion_mode,
-    // TODO: use_model_reg_init,
-
-    //let iarch = initialize_architecture(
-    //    &mut arch,
-    //    symtab,
-    //    type_info,
-    //    &isa_config,
-    //    assertion_mode,
-    //    use_model_reg_init,
-    //);
-
-    // let function_id = shared_state.symtab.lookup(&footprint_function);
-    // let (args, ret_ty, instrs) = shared_state.functions.get(&function_id).unwrap();
-    // let task_state = TaskState::new().with_reset_registers(reset_registers);
-    // let mut task = LocalFrame::new(
-    //     function_id,
-    //     args,
-    //     ret_ty,
-    //     Some(&[opcode_val.clone()]),
-    //     instrs,
-    // )
-    // .add_lets(lets)
-    // .add_regs(regs)
-    // .set_memory(memory)
-    // .task_with_checkpoint(0, &task_state, initial_checkpoint);
+    let footprint_function = "zisla_footprint";
+    let function_id = shared_state.symtab.lookup(&footprint_function);
+    let (args, ret_ty, instrs) = shared_state.functions.get(&function_id).unwrap();
+    let memory = Memory::new();
+    let task_state = TaskState::<B>::new();
+    let initial_checkpoint = Checkpoint::new();
+    let task = LocalFrame::new(function_id, args, ret_ty, Some(&[opcode]), instrs)
+        .add_lets(&iarch.lets)
+        .add_regs(&iarch.regs)
+        .set_memory(memory)
+        .task_with_checkpoint(0, &task_state, initial_checkpoint);
     // task.set_stop_conditions(&stop_conditions);
 
-    // let num_threads = 1;
-    // executor::start_multi(
-    //     num_threads,
-    //     None,
-    //     vec![task],
-    //     shared_state,
-    //     queue.clone(),
-    //     &executor::trace_collector,
-    // );
+    let num_threads = 1;
+    let queue = Arc::new(SegQueue::new());
+    executor::start_multi(
+        num_threads,
+        None,
+        vec![task],
+        shared_state,
+        queue.clone(),
+        &executor::trace_collector,
+    );
 }
 
 fn parse_ir<'a, 'input, B: BV>(
