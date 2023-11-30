@@ -15,14 +15,14 @@ use smallvec::{smallvec, SmallVec};
 use std::fmt::Write;
 use std::string::{String, ToString};
 
-pub(crate) mod regs;
-pub(crate) use self::regs::*;
+pub mod regs;
+pub use self::regs::*;
 pub mod imms;
 pub use self::imms::*;
 pub mod args;
 pub use self::args::*;
 pub mod emit;
-pub(crate) use self::emit::*;
+pub use self::emit::*;
 use crate::isa::aarch64::abi::AArch64MachineDeps;
 
 pub(crate) mod unwind;

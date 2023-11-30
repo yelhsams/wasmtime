@@ -17,6 +17,10 @@ path = "src/main.rs"
 name = "isla"
 path = "src/isla.rs"
 
+[[bin]]
+name = "emit"
+path = "src/emit.rs"
+
 [dependencies]
 cranelift-isle = { path = "../../isle" }
 cranelift-codegen = { path = "../../../codegen" }
