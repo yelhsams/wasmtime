@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
         &type_info,
     ) {
         Ok(isa_config) => isa_config,
-        Err(msg) => return Err(anyhow::Error::msg(msg)),
+        Err(msg) => anyhow::bail!(msg),
     };
 
     // Assemble an instruction.
