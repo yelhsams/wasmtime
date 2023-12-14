@@ -15,8 +15,10 @@ use isla_lib::ir_lexer::new_ir_lexer;
 use isla_lib::ir_parser;
 use isla_lib::memory::Memory;
 use isla_lib::simplify::{self, WriteOpts};
+use isla_lib::smt::smtlib;
 use isla_lib::smt::{self, Checkpoint, Event, Solver};
 use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{self, BufWriter, Read};
@@ -65,7 +67,6 @@ fn main() -> anyhow::Result<()> {
         AssertionMode::Optimistic,
         use_model_reg_init,
     );
-    let shared_state = &&iarch.shared_state;
 
     // Assemble an instruction.
     let inst = Inst::AluRRR {
@@ -84,11 +85,8 @@ fn main() -> anyhow::Result<()> {
 
     // Dump.
     for events in paths {
-        let stdout = std::io::stdout();
-        let mut handle = BufWriter::with_capacity(5 * usize::pow(2, 20), stdout.lock());
-        let write_opts = WriteOpts::default();
-        simplify::write_events_with_opts(&mut handle, &events, &shared_state, &write_opts).unwrap();
-        handle.flush().unwrap();
+        let filtered = tree_shake(&events);
+        write_events(&filtered, &iarch)?;
     }
 
     Ok(())
@@ -187,6 +185,231 @@ fn trace_opcode<'ir, B: BV>(
     }
 
     Ok(paths)
+}
+
+fn event_writes<B: BV>(event: &Event<B>) -> Option<smt::Sym> {
+    match event {
+        Event::Smt(def, _, _) => match def {
+            smtlib::Def::DefineConst(v, _) => Some(*v),
+            _ => None,
+        },
+        Event::ReadReg(_, _, val) => match val {
+            Val::Symbolic(sym) => Some(*sym),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn defns<B: BV>(events: &Vec<Event<B>>) -> HashMap<smt::Sym, usize> {
+    let mut defn_idx = HashMap::new();
+    for (i, event) in events.iter().enumerate() {
+        if let Some(sym) = event_writes(event) {
+            defn_idx.insert(sym, i);
+        }
+    }
+    defn_idx
+}
+
+fn exp_uses(exp: &smtlib::Exp<smt::Sym>) -> HashSet<smt::Sym> {
+    use smtlib::Exp::*;
+    match exp {
+        Var(sym) => HashSet::from([*sym]),
+        //Bits(_) | Bits64(_) | Enum(_) | Bool(_) | FPConstant(..) | FPRoundingMode(_) => (),
+        Not(exp)
+        | Bvnot(exp)
+        | Bvneg(exp)
+        | Extract(_, _, exp)
+        | ZeroExtend(_, exp)
+        | SignExtend(_, exp)
+        | FPUnary(_, exp) => exp_uses(exp),
+        Eq(lhs, rhs)
+        | Neq(lhs, rhs)
+        | And(lhs, rhs)
+        | Or(lhs, rhs)
+        | Bvand(lhs, rhs)
+        | Bvor(lhs, rhs)
+        | Bvxor(lhs, rhs)
+        | Bvnand(lhs, rhs)
+        | Bvnor(lhs, rhs)
+        | Bvxnor(lhs, rhs)
+        | Bvadd(lhs, rhs)
+        | Bvsub(lhs, rhs)
+        | Bvmul(lhs, rhs)
+        | Bvudiv(lhs, rhs)
+        | Bvsdiv(lhs, rhs)
+        | Bvurem(lhs, rhs)
+        | Bvsrem(lhs, rhs)
+        | Bvsmod(lhs, rhs)
+        | Bvult(lhs, rhs)
+        | Bvslt(lhs, rhs)
+        | Bvule(lhs, rhs)
+        | Bvsle(lhs, rhs)
+        | Bvuge(lhs, rhs)
+        | Bvsge(lhs, rhs)
+        | Bvugt(lhs, rhs)
+        | Bvsgt(lhs, rhs)
+        | Bvshl(lhs, rhs)
+        | Bvlshr(lhs, rhs)
+        | Bvashr(lhs, rhs)
+        | Concat(lhs, rhs)
+        | FPBinary(_, lhs, rhs) => {
+            let lhs_uses = exp_uses(lhs);
+            let rhs_uses = exp_uses(rhs);
+            &lhs_uses | &rhs_uses
+        }
+        //Ite(cond, then_exp, else_exp) => {
+        //    uses_in_exp(uses, cond);
+        //    uses_in_exp(uses, then_exp);
+        //    uses_in_exp(uses, else_exp)
+        //}
+        //App(f, args) => {
+        //    uses.insert(*f, uses.get(f).unwrap_or(&0) + 1);
+        //    for arg in args {
+        //        uses_in_exp(uses, arg);
+        //    }
+        //}
+        //Select(array, index) => {
+        //    uses_in_exp(uses, array);
+        //    uses_in_exp(uses, index)
+        //}
+        //Store(array, index, val) => {
+        //    uses_in_exp(uses, array);
+        //    uses_in_exp(uses, index);
+        //    uses_in_exp(uses, val)
+        //}
+        //Distinct(exps) => {
+        //    for exp in exps {
+        //        uses_in_exp(uses, exp);
+        //    }
+        //}
+        //FPRoundingUnary(_, rm, exp) => {
+        //    uses_in_exp(uses, rm);
+        //    uses_in_exp(uses, exp);
+        //}
+        //FPRoundingBinary(_, rm, lhs, rhs) => {
+        //    uses_in_exp(uses, rm);
+        //    uses_in_exp(uses, lhs);
+        //    uses_in_exp(uses, rhs)
+        //}
+        //FPfma(rm, x, y, z) => {
+        //    uses_in_exp(uses, rm);
+        //    uses_in_exp(uses, x);
+        //    uses_in_exp(uses, y);
+        //    uses_in_exp(uses, z)
+        //}
+        _ => HashSet::new(),
+    }
+}
+
+fn smt_def_uses(def: &smtlib::Def) -> HashSet<smt::Sym> {
+    match def {
+        // DeclareConst(Sym, Ty),
+        // DeclareFun(Sym, Vec<Ty>, Ty),
+        smtlib::Def::DefineConst(_, exp) => exp_uses(&exp),
+        // DefineEnum(Name, usize),
+        // Assert(Exp<Sym>),
+        _ => HashSet::new(),
+    }
+}
+
+fn val_uses<B: BV>(val: &Val<B>) -> HashSet<smt::Sym> {
+    // See: simplify::uses_in_value
+    match val {
+        Val::Symbolic(sym) => HashSet::from([*sym]),
+        // MixedBits(segments) => segments.iter().for_each(|segment| match segment {
+        //     BitsSegment::Symbolic(v) => {
+        //         uses.insert(*v, uses.get(v).unwrap_or(&0) + 1);
+        //     }
+        //     BitsSegment::Concrete(_) => (),
+        // }),
+        // I64(_) | I128(_) | Bool(_) | Bits(_) | Enum(_) | String(_) | Unit | Ref(_) | Poison => (),
+        // List(vals) | Vector(vals) => vals.iter().for_each(|val| uses_in_value(uses, val)),
+        // Struct(fields) => fields.iter().for_each(|(_, val)| uses_in_value(uses, val)),
+        // Ctor(_, val) => uses_in_value(uses, val),
+        // SymbolicCtor(v, possibilities) => {
+        //     uses.insert(*v, uses.get(v).unwrap_or(&0) + 1);
+        //     possibilities
+        //         .iter()
+        //         .for_each(|(_, val)| uses_in_value(uses, val))
+        // }
+        _ => HashSet::new(),
+    }
+}
+
+fn uses<B: BV>(event: &Event<B>) -> HashSet<smt::Sym> {
+    match event {
+        Event::Smt(def, _, _) => smt_def_uses(&def),
+        Event::WriteReg(_, _, val) => val_uses(val),
+        _ => HashSet::new(),
+    }
+}
+
+fn tree_shake<B: BV>(events: &Vec<Event<B>>) -> Vec<Event<B>> {
+    // Definitions.
+    let defn_idx = defns(events);
+
+    // Work list: populate with register writes.
+    let mut work_list = Vec::new();
+    let mut live = HashSet::new();
+    for (i, event) in events.iter().enumerate() {
+        match event {
+            Event::WriteReg(_, _, val) => match val {
+                Val::Symbolic(sym) => {
+                    // Mark live.
+                    live.insert(i);
+
+                    // Push the variable to be visited.
+                    let d = defn_idx[&sym];
+                    live.insert(d);
+                    work_list.push(d);
+                }
+                _ => continue,
+            },
+            _ => continue,
+        };
+    }
+
+    // Process.
+    while !work_list.is_empty() {
+        let i = work_list.pop().unwrap();
+        assert!(live.contains(&i), "visited events should be live");
+        let event = &events[i];
+
+        // Mark uses live.
+        for u in uses(&event) {
+            // Lookup definition of this dependency.
+            let ui = defn_idx[&u];
+            if live.contains(&ui) {
+                continue;
+            }
+
+            live.insert(ui);
+            work_list.push(ui);
+        }
+    }
+
+    events
+        .iter()
+        .enumerate()
+        .filter_map(|(i, event)| if live.contains(&i) { Some(event) } else { None })
+        .cloned()
+        .collect()
+}
+
+fn write_events<'ir, B: BV>(
+    events: &Vec<Event<B>>,
+    iarch: &'ir Initialized<'ir, B>,
+) -> anyhow::Result<()> {
+    // Print.
+    let stdout = std::io::stdout();
+    let mut handle = BufWriter::with_capacity(5 * usize::pow(2, 20), stdout.lock());
+    let write_opts = WriteOpts::default();
+    simplify::write_events_with_opts(&mut handle, &events, &iarch.shared_state, &write_opts)
+        .unwrap();
+    handle.flush().unwrap();
+
+    Ok(())
 }
 
 fn parse_ir<'a, 'input, B: BV>(
