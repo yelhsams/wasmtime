@@ -298,7 +298,7 @@ fn exp_uses(exp: &smtlib::Exp<smt::Sym>) -> HashSet<smt::Sym> {
         //    uses_in_exp(uses, y);
         //    uses_in_exp(uses, z)
         //}
-        _ => HashSet::new(),
+        _ => todo!(),
     }
 }
 
