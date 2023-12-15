@@ -21,6 +21,10 @@ path = "src/isla.rs"
 name = "emit"
 path = "src/emit.rs"
 
+[[bin]]
+name = "x64"
+path = "src/x64.rs"
+
 [dependencies]
 cranelift-isle = { path = "../../isle" }
 cranelift-codegen = { path = "../../../codegen" }
