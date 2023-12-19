@@ -1790,7 +1790,6 @@ dependencies = [
 [[package]]
 name = "isla-lib"
 version = "0.2.0"
-source = "git+https://github.com/rems-project/isla.git?rev=4134411c0f463807edd788f67b3db34c1899d9b6#4134411c0f463807edd788f67b3db34c1899d9b6"
 dependencies = [
  "ahash 0.7.7",
  "bincode",
