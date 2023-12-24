@@ -318,7 +318,7 @@ fn trace_opcode<'ir, B: BV>(
     loop {
         match queue.pop() {
             Some(Ok((_, mut events))) => {
-                simplify::hide_initialization(&mut events);
+                // simplify::hide_initialization(&mut events);
                 simplify::remove_extra_register_fields(&mut events);
                 simplify::remove_repeated_register_reads(&mut events);
                 simplify::remove_unused_register_assumptions(&mut events);
