@@ -5,7 +5,6 @@ use cranelift_codegen::isa::x64::{
 };
 use cranelift_codegen::{settings, MachBuffer, MachInstEmit, Reg, Writable};
 use crossbeam::queue::SegQueue;
-use isla_lib::executor::{self, freeze_frame, LocalFrame, TaskState};
 use isla_lib::init::{initialize_architecture, Initialized};
 use isla_lib::ir::{AssertionMode, Def, IRTypeInfo, Name, Symtab, Ty, Val};
 use isla_lib::ir_lexer::new_ir_lexer;
@@ -24,6 +23,10 @@ use isla_lib::{config::ISAConfig, executor::unfreeze_frame};
 use isla_lib::{
     error::{ExecError, IslaError},
     memory::Address,
+};
+use isla_lib::{
+    executor::{self, freeze_frame, LocalFrame, TaskState},
+    ir::linearize,
 };
 use sha2::{Digest, Sha256};
 use std::io::prelude::*;
@@ -68,6 +71,24 @@ fn main() -> anyhow::Result<()> {
         Ok(isa_config) => isa_config,
         Err(msg) => anyhow::bail!(msg),
     };
+
+    let linearize_functions = vec![
+        // See: https://github.com/rems-project/isla-testgen/blob/a9759247bfdff9c9c39d95a4cfd85318e5bf50fe/c86-command
+        //"fdiv_int",
+        "bool_to_bits",
+        "bits_to_bool",
+        //"bit_to_bool",
+        //"isEven",
+        "signed_byte_p_int",
+        "zf_spec",
+        //"b_xor",
+        //"logand_int",
+        //"not_bit",
+        //"floor2",
+    ];
+    for name in linearize_functions {
+        linearize_function(&mut arch, name, &mut symtab)?;
+    }
 
     let use_model_reg_init = true;
     let iarch = initialize_architecture(
@@ -507,4 +528,46 @@ fn parse_ir<'a, 'input, B: BV>(
         Ok(ir) => Ok(ir),
         Err(_) => Err(anyhow::Error::msg("bad")),
     }
+}
+
+fn linearize_function<'ir, B: BV>(
+    arch: &mut Vec<Def<Name, B>>,
+    name: &str,
+    symtab: &mut Symtab<'ir>,
+) -> anyhow::Result<()> {
+    log!(log::VERBOSE, format!("linearize function {}", name));
+
+    // Lookup function name.
+    let target = match symtab.get(&zencode::encode(name)) {
+        Some(t) => t,
+        None => anyhow::bail!("function {} could not be found", name),
+    };
+
+    // Find signature.
+    let (_args, ret) = lookup_signature(arch, target)?;
+
+    // Rewrite.
+    for def in arch.iter_mut() {
+        if let Def::Fn(f, _, body) = def {
+            if *f == target {
+                let rewritten = linearize::linearize(body.to_vec(), &ret, symtab);
+                *body = rewritten;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn lookup_signature<B: BV>(
+    arch: &Vec<Def<Name, B>>,
+    target: Name,
+) -> anyhow::Result<(Vec<Ty<Name>>, Ty<Name>)> {
+    for def in arch {
+        match def {
+            Def::Val(f, args, ret) if *f == target => return Ok((args.clone(), ret.clone())),
+            _ => (),
+        }
+    }
+    anyhow::bail!("could not find type signature")
 }
