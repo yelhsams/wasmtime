@@ -1,11 +1,9 @@
-use anyhow::Context as _;
 use clap::Parser;
 use cranelift_codegen::isa::x64::{
     self,
     inst::{args::*, *},
 };
 use cranelift_codegen::{settings, MachBuffer, MachInstEmit, Reg, Writable};
-use cranelift_isle::overlap::check;
 use crossbeam::queue::SegQueue;
 use isla_lib::executor::{self, freeze_frame, LocalFrame, TaskState};
 use isla_lib::init::{initialize_architecture, Initialized};
@@ -29,10 +27,9 @@ use isla_lib::{
 };
 use sha2::{Digest, Sha256};
 use std::io::prelude::*;
-use std::io::{self, BufWriter, Read};
-use std::path::{Path, PathBuf};
+use std::io::BufWriter;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::{collections::HashMap, fs::File};
 
 #[derive(Parser)]
 struct Options {
@@ -43,14 +40,18 @@ struct Options {
     /// ISA config file.
     #[clap(long)]
     isa_config: PathBuf,
+
+    /// Trace output directory.
+    #[clap(long, default_value = ".")]
+    output_dir: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
     let options = Options::parse();
-    log::set_flags(log::VERBOSE | log::MEMORY);
+    log::set_flags(log::VERBOSE);
 
     // Parse ISLA Architecture.
-    let contents = read_to_string(&options.arch)?;
+    let contents = std::fs::read_to_string(&options.arch)?;
     let mut symtab = Symtab::new();
     let mut arch = parse_ir::<B64>(&contents, &mut symtab)?;
 
@@ -97,11 +98,19 @@ fn main() -> anyhow::Result<()> {
     let paths = trace_opcode(&machine_code, &iarch)?;
 
     // Dump.
-    for events in &paths {
-        write_events(&events, &iarch)?;
+    for (i, events) in paths.iter().enumerate() {
+        let filename = format!("trace{i:04}.out");
+        let path = options.output_dir.join(filename);
+        log!(log::VERBOSE, format!("write trace to {}", path.display()));
+
+        let file = std::fs::File::create(path)?;
+        write_events(&events, &iarch, file)?;
     }
 
-    println!("generated {} trace paths", paths.len());
+    log!(
+        log::VERBOSE,
+        format!("generated {} trace paths", paths.len())
+    );
 
     Ok(())
 }
@@ -161,7 +170,6 @@ fn trace_opcode<'ir, B: BV>(
     assert_eq!(queue.len(), 1);
     let (frame, checkpoint) = queue.pop().expect("pop failed");
 
-    dump_checkpoint(&checkpoint, iarch)?;
     let mut solver = Solver::from_checkpoint(&solver_ctx, checkpoint);
 
     // Initialize registers -----------------------------------------------------
@@ -169,9 +177,6 @@ fn trace_opcode<'ir, B: BV>(
 
     let mut local_frame = executor::unfreeze_frame(&frame);
     for (n, ty) in &shared_state.registers {
-        let name = zencode::decode(symtab.to_str(*n));
-        println!("register: {} {:?}", name, ty);
-
         // Only handle general-purpose registers.
         if let Ty::Bits(bits) = ty {
             let var = solver.fresh();
@@ -206,26 +211,6 @@ fn trace_opcode<'ir, B: BV>(
     local_frame.memory_mut().set_client_info(memory_client_info);
 
     let frame = freeze_frame(&local_frame);
-
-    // // Write opcode -------------------------------------------------------------
-
-    // let mut local_frame = unfreeze_frame(&frame);
-
-    // for (i, opcode_byte) in opcode.iter().enumerate() {
-    //     local_frame
-    //         .memory_mut()
-    //         .write(
-    //             Val::Unit,
-    //             Val::Bits(B::from_u64(INIT_PC + i as u64)),
-    //             Val::Bits(B::from_u8(opcode_byte.clone())),
-    //             &mut solver,
-    //             None,
-    //             smt::WriteOpts::default(),
-    //         )
-    //         .expect("memory write failed");
-    // }
-
-    // let frame = freeze_frame(&local_frame);
 
     // Set initial program counter ----------------------------------------------
 
@@ -485,19 +470,26 @@ fn dump_checkpoint<'ir, B: BV>(
 ) -> anyhow::Result<()> {
     if let Some(trace) = checkpoint.trace() {
         let events: Vec<Event<B>> = trace.to_vec().into_iter().cloned().collect();
-        write_events(&events, iarch)?;
+        write_events_to_stdout(&events, iarch)?;
     }
     Ok(())
 }
 
 /// Write ISLA trace events to stdout.
-fn write_events<'ir, B: BV>(
+fn write_events_to_stdout<'ir, B: BV>(
     events: &Vec<Event<B>>,
     iarch: &'ir Initialized<'ir, B>,
 ) -> anyhow::Result<()> {
-    // Print.
-    let stdout = std::io::stdout();
-    let mut handle = BufWriter::with_capacity(5 * usize::pow(2, 20), stdout.lock());
+    let stdout = std::io::stdout().lock();
+    write_events(events, iarch, stdout)
+}
+
+fn write_events<'ir, B: BV>(
+    events: &Vec<Event<B>>,
+    iarch: &'ir Initialized<'ir, B>,
+    w: impl Sized + Write,
+) -> anyhow::Result<()> {
+    let mut handle = BufWriter::with_capacity(5 * usize::pow(2, 20), w);
     let write_opts = WriteOpts::default();
     simplify::write_events_with_opts(&mut handle, &events, &iarch.shared_state, &write_opts)
         .unwrap();
@@ -515,22 +507,4 @@ fn parse_ir<'a, 'input, B: BV>(
         Ok(ir) => Ok(ir),
         Err(_) => Err(anyhow::Error::msg("bad")),
     }
-}
-
-/// Read an entire file into a string.
-fn read_to_string<P: AsRef<Path>>(path: P) -> anyhow::Result<String> {
-    let mut buffer = String::new();
-    let path = path.as_ref();
-    if path == Path::new("-") {
-        let stdin = io::stdin();
-        let mut stdin = stdin.lock();
-        stdin
-            .read_to_string(&mut buffer)
-            .context("failed to read stdin to string")?;
-    } else {
-        let mut file = File::open(path)?;
-        file.read_to_string(&mut buffer)
-            .with_context(|| format!("failed to read {} to string", path.display()))?;
-    }
-    Ok(buffer)
 }
