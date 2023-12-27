@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use cranelift_codegen::ir::types::I32;
 use cranelift_codegen::isa::aarch64::inst::*;
 use cranelift_codegen::settings;
@@ -36,6 +36,10 @@ struct Options {
     /// ISA config file.
     #[clap(long)]
     isa_config: PathBuf,
+
+    /// Filter relevant events from the trace.
+    #[clap(long, action=ArgAction::SetTrue)]
+    filter: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -108,8 +112,8 @@ fn main() -> anyhow::Result<()> {
         Inst::AluRRRExtend {
             alu_op: ALUOp::SubS,
             size: OperandSize::Size64,
-            rd: writable_zero_reg(),
-            rn: stack_reg(),
+            rd: writable_xreg(10),
+            rn: xreg(11),
             rm: xreg(12),
             extendop: ExtendOp::UXTX,
         },
@@ -162,14 +166,6 @@ fn main() -> anyhow::Result<()> {
             from_bits: 8,
             to_bits: 32,
         },
-        Inst::AluRRRExtend {
-            alu_op: ALUOp::Sub,
-            size: OperandSize::Size64,
-            rd: writable_xreg(20),
-            rn: xreg(21),
-            rm: xreg(22),
-            extendop: ExtendOp::UXTW,
-        },
     ];
 
     for inst in insts {
@@ -191,8 +187,12 @@ fn main() -> anyhow::Result<()> {
 
         // Dump.
         for events in paths {
-            let filtered = tree_shake(&events);
-            write_events(&filtered, &iarch)?;
+            let events = if options.filter {
+                tree_shake(&events)
+            } else {
+                events
+            };
+            write_events(&events, &iarch)?;
         }
     }
 
@@ -488,6 +488,7 @@ fn tree_shake<B: BV>(events: &Vec<Event<B>>) -> Vec<Event<B>> {
         // Mark uses live.
         for u in uses(&event) {
             // Lookup definition of this dependency.
+            assert!(defn_idx.contains_key(&u), "no definition for {:?}", u);
             let ui = defn_idx[&u];
             if live.contains(&ui) {
                 continue;
