@@ -1191,7 +1191,11 @@ fn mem_finalize_for_show(mem: &AMode, state: &EmitState) -> (String, AMode) {
 }
 
 impl Inst {
-    fn print_with_state(&self, state: &mut EmitState, allocs: &mut AllocationConsumer) -> String {
+    pub fn print_with_state(
+        &self,
+        state: &mut EmitState,
+        allocs: &mut AllocationConsumer,
+    ) -> String {
         let mut empty_allocs = AllocationConsumer::default();
 
         fn op_name(alu_op: ALUOp) -> &'static str {

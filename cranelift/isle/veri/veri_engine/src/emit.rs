@@ -1,7 +1,9 @@
 use anyhow::Context as _;
 use clap::Parser;
+use cranelift_codegen::ir::types::I32;
 use cranelift_codegen::isa::aarch64::inst::*;
 use cranelift_codegen::settings;
+use cranelift_codegen::AllocationConsumer;
 use cranelift_codegen::MachBuffer;
 use cranelift_codegen::MachInstEmit;
 use crossbeam::queue::SegQueue;
@@ -68,25 +70,130 @@ fn main() -> anyhow::Result<()> {
         use_model_reg_init,
     );
 
-    // Assemble an instruction.
-    let inst = Inst::AluRRR {
-        alu_op: ALUOp::Add,
-        size: OperandSize::Size64,
-        rd: writable_xreg(4),
-        rn: xreg(5),
-        rm: xreg(6),
-    };
+    // Assemble and trace instructions.
+    let insts = vec![
+        Inst::AluRRR {
+            alu_op: ALUOp::Add,
+            size: OperandSize::Size64,
+            rd: writable_xreg(4),
+            rn: xreg(5),
+            rm: xreg(6),
+        },
+        Inst::AluRRRR {
+            alu_op: ALUOp3::MSub,
+            size: OperandSize::Size32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+            ra: xreg(4),
+        },
+        Inst::AluRRImmLogic {
+            alu_op: ALUOp::Eor,
+            size: OperandSize::Size32,
+            rd: writable_xreg(1),
+            rn: xreg(5),
+            imml: ImmLogic::maybe_from_u64(0x00007fff, I32).unwrap(),
+        },
+        Inst::AluRRRShift {
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size64,
+            rd: writable_xreg(10),
+            rn: xreg(11),
+            rm: xreg(12),
+            shiftop: ShiftOpAndAmt::new(
+                ShiftOp::LSL,
+                ShiftOpShiftImm::maybe_from_shift(23).unwrap(),
+            ),
+        },
+        Inst::AluRRRExtend {
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size64,
+            rd: writable_zero_reg(),
+            rn: stack_reg(),
+            rm: xreg(12),
+            extendop: ExtendOp::UXTX,
+        },
+        // TODO: BitRR
+        // Inst::BitRR {
+        //     op: BitOp::Rev64,
+        //     size: OperandSize::Size64,
+        //     rd: writable_xreg(1),
+        //     rn: xreg(10),
+        // },
+        Inst::Mov {
+            size: OperandSize::Size64,
+            rd: writable_xreg(8),
+            rm: xreg(9),
+        },
+        Inst::CSel {
+            rd: writable_xreg(10),
+            rn: xreg(12),
+            rm: xreg(14),
+            cond: Cond::Hs,
+        },
+        Inst::CCmp {
+            size: OperandSize::Size64,
+            rn: xreg(22),
+            rm: xreg(1),
+            nzcv: NZCV::new(false, false, true, true),
+            cond: Cond::Eq,
+        },
+        Inst::AluRRImmShift {
+            alu_op: ALUOp::Lsr,
+            size: OperandSize::Size64,
+            rd: writable_xreg(10),
+            rn: xreg(11),
+            immshift: ImmShift::maybe_from_u64(57).unwrap(),
+        },
+        Inst::AluRRImm12 {
+            alu_op: ALUOp::SubS,
+            size: OperandSize::Size32,
+            rd: writable_xreg(7),
+            rn: xreg(8),
+            imm12: Imm12 {
+                bits: 0x123,
+                shift12: false,
+            },
+        },
+        Inst::Extend {
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            signed: true,
+            from_bits: 8,
+            to_bits: 32,
+        },
+        Inst::AluRRRExtend {
+            alu_op: ALUOp::Sub,
+            size: OperandSize::Size64,
+            rd: writable_xreg(20),
+            rn: xreg(21),
+            rm: xreg(22),
+            extendop: ExtendOp::UXTW,
+        },
+    ];
 
-    let opcodes = opcodes(&inst);
-    assert_eq!(opcodes.len(), 1);
+    for inst in insts {
+        let opcodes = opcodes(&inst);
+        assert_eq!(opcodes.len(), 1);
+        let opcode = opcodes[0];
 
-    // ISLA trace.
-    let paths = trace_opcode(opcodes[0], &iarch)?;
+        // Show assembly.
+        let asm =
+            inst.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
 
-    // Dump.
-    for events in paths {
-        let filtered = tree_shake(&events);
-        write_events(&filtered, &iarch)?;
+        println!("--------------------------------------------------");
+        println!("inst = {inst:?}");
+        println!("opcode = {opcode:08x}");
+        println!("asm = {asm}");
+
+        // ISLA trace.
+        let paths = trace_opcode(opcode, &iarch)?;
+
+        // Dump.
+        for events in paths {
+            let filtered = tree_shake(&events);
+            write_events(&filtered, &iarch)?;
+        }
     }
 
     Ok(())
@@ -215,7 +322,9 @@ fn exp_uses(exp: &smtlib::Exp<smt::Sym>) -> HashSet<smt::Sym> {
     use smtlib::Exp::*;
     match exp {
         Var(sym) => HashSet::from([*sym]),
-        //Bits(_) | Bits64(_) | Enum(_) | Bool(_) | FPConstant(..) | FPRoundingMode(_) => (),
+        Bits(_) | Bits64(_) | Enum(_) | Bool(_) | FPConstant(..) | FPRoundingMode(_) => {
+            HashSet::new()
+        }
         Not(exp)
         | Bvnot(exp)
         | Bvneg(exp)
@@ -298,7 +407,7 @@ fn exp_uses(exp: &smtlib::Exp<smt::Sym>) -> HashSet<smt::Sym> {
         //    uses_in_exp(uses, y);
         //    uses_in_exp(uses, z)
         //}
-        _ => todo!(),
+        _ => todo!("not yet implemented expression: {:?}", exp),
     }
 }
 
