@@ -444,18 +444,15 @@ fn tree_shake<B: BV>(events: &Vec<Event<B>>) -> Vec<Event<B>> {
     let mut live = HashSet::new();
     for (i, event) in events.iter().enumerate() {
         match event {
-            Event::WriteReg(_, _, val) => match val {
-                Val::Symbolic(sym) => {
-                    // Mark live.
-                    live.insert(i);
+            Event::WriteReg(_, _, val) => val_uses(val).iter().for_each(|sym| {
+                // Mark live.
+                live.insert(i);
 
-                    // Push the variable to be visited.
-                    let d = defn_idx[&sym];
-                    live.insert(d);
-                    work_list.push(d);
-                }
-                _ => continue,
-            },
+                // Push the variable to be visited.
+                let d = defn_idx[&sym];
+                live.insert(d);
+                work_list.push(d);
+            }),
             _ => continue,
         };
     }
