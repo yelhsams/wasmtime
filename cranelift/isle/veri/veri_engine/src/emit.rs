@@ -270,24 +270,21 @@ fn trace_opcode<'ir, B: BV>(
     Ok(paths)
 }
 
-fn event_writes<B: BV>(event: &Event<B>) -> Option<smt::Sym> {
+fn event_writes<B: BV>(event: &Event<B>) -> HashSet<smt::Sym> {
     match event {
         Event::Smt(def, _, _) => match def {
-            smtlib::Def::DefineConst(v, _) => Some(*v),
-            _ => None,
+            smtlib::Def::DefineConst(v, _) => HashSet::from([*v]),
+            _ => HashSet::new(),
         },
-        Event::ReadReg(_, _, val) => match val {
-            Val::Symbolic(sym) => Some(*sym),
-            _ => None,
-        },
-        _ => None,
+        Event::ReadReg(_, _, val) => val_uses(val),
+        _ => HashSet::new(),
     }
 }
 
 fn defns<B: BV>(events: &Vec<Event<B>>) -> HashMap<smt::Sym, usize> {
     let mut defn_idx = HashMap::new();
     for (i, event) in events.iter().enumerate() {
-        if let Some(sym) = event_writes(event) {
+        for sym in event_writes(event) {
             defn_idx.insert(sym, i);
         }
     }
@@ -343,11 +340,13 @@ fn exp_uses(exp: &smtlib::Exp<smt::Sym>) -> HashSet<smt::Sym> {
             let rhs_uses = exp_uses(rhs);
             &lhs_uses | &rhs_uses
         }
-        //Ite(cond, then_exp, else_exp) => {
-        //    uses_in_exp(uses, cond);
-        //    uses_in_exp(uses, then_exp);
-        //    uses_in_exp(uses, else_exp)
-        //}
+        Ite(cond, then_exp, else_exp) => {
+            let cond_uses = exp_uses(cond);
+            let then_uses = exp_uses(then_exp);
+            let else_uses = exp_uses(else_exp);
+            let uses = &cond_uses | &then_uses;
+            &uses | &else_uses
+        }
         //App(f, args) => {
         //    uses.insert(*f, uses.get(f).unwrap_or(&0) + 1);
         //    for arg in args {
@@ -400,17 +399,23 @@ fn smt_def_uses(def: &smtlib::Def) -> HashSet<smt::Sym> {
 
 fn val_uses<B: BV>(val: &Val<B>) -> HashSet<smt::Sym> {
     // See: simplify::uses_in_value
+    use Val::*;
     match val {
-        Val::Symbolic(sym) => HashSet::from([*sym]),
+        Symbolic(sym) => HashSet::from([*sym]),
         // MixedBits(segments) => segments.iter().for_each(|segment| match segment {
         //     BitsSegment::Symbolic(v) => {
         //         uses.insert(*v, uses.get(v).unwrap_or(&0) + 1);
         //     }
         //     BitsSegment::Concrete(_) => (),
         // }),
-        // I64(_) | I128(_) | Bool(_) | Bits(_) | Enum(_) | String(_) | Unit | Ref(_) | Poison => (),
+        I64(_) | I128(_) | Bool(_) | Bits(_) | Enum(_) | String(_) | Unit | Ref(_) | Poison => {
+            HashSet::new()
+        }
         // List(vals) | Vector(vals) => vals.iter().for_each(|val| uses_in_value(uses, val)),
-        // Struct(fields) => fields.iter().for_each(|(_, val)| uses_in_value(uses, val)),
+        Struct(fields) => fields
+            .iter()
+            .map(|(_, val)| val_uses(val))
+            .fold(HashSet::new(), |acc, uses| &acc | &uses),
         // Ctor(_, val) => uses_in_value(uses, val),
         // SymbolicCtor(v, possibilities) => {
         //     uses.insert(*v, uses.get(v).unwrap_or(&0) + 1);
@@ -418,7 +423,7 @@ fn val_uses<B: BV>(val: &Val<B>) -> HashSet<smt::Sym> {
         //         .iter()
         //         .for_each(|(_, val)| uses_in_value(uses, val))
         // }
-        _ => HashSet::new(),
+        _ => todo!("not yet implemented value: {:?}", val),
     }
 }
 
