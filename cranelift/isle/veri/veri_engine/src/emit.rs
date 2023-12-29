@@ -1,5 +1,3 @@
-use anyhow::Context as _;
-use clap::{ArgAction, Parser};
 use cranelift_codegen::ir::types::I32;
 use cranelift_codegen::isa::aarch64::inst::*;
 use cranelift_codegen::settings;
@@ -7,63 +5,39 @@ use cranelift_codegen::AllocationConsumer;
 use cranelift_codegen::MachBuffer;
 use cranelift_codegen::MachInstEmit;
 use crossbeam::queue::SegQueue;
+use isla::opts;
 use isla_lib::bitvector::{b64::B64, BV};
-use isla_lib::config::ISAConfig;
 use isla_lib::error::IslaError;
 use isla_lib::executor::{self, LocalFrame, TaskState};
 use isla_lib::init::{initialize_architecture, Initialized};
-use isla_lib::ir::{AssertionMode, Def, IRTypeInfo, Name, Symtab, Val};
-use isla_lib::ir_lexer::new_ir_lexer;
-use isla_lib::ir_parser;
+use isla_lib::ir::{AssertionMode, Val};
 use isla_lib::memory::Memory;
 use isla_lib::simplify::{self, WriteOpts};
 use isla_lib::smt::smtlib;
 use isla_lib::smt::{self, Checkpoint, Event, Solver};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
 use std::io::prelude::*;
-use std::io::{self, BufWriter, Read};
-use std::path::{Path, PathBuf};
+use std::io::BufWriter;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-#[derive(Parser)]
-struct Options {
-    /// Architecture definition.
-    #[clap(long)]
-    arch: PathBuf,
-
-    /// ISA config file.
-    #[clap(long)]
-    isa_config: PathBuf,
-
-    /// Filter relevant events from the trace.
-    #[clap(long, action=ArgAction::SetTrue)]
-    filter: bool,
-}
-
 fn main() -> anyhow::Result<()> {
-    let options = Options::parse();
+    // Command-line options.
+    let mut opts = opts::common_opts();
+    opts.optflag("", "filter", "filter relevant events from the trace");
 
-    // Parse ISLA Architecture.
-    let contents = read_to_string(&options.arch)?;
-    let mut symtab = Symtab::new();
-    let mut arch = parse_ir::<B64>(&contents, &mut symtab)?;
-
-    // ISLA ISA Config.
+    // Build ISLA architecture.
     let mut hasher = Sha256::new();
-    let type_info = IRTypeInfo::new(&arch);
-    let isa_config = match ISAConfig::<B64>::from_file(
-        &mut hasher,
-        &options.isa_config,
-        None,
-        &symtab,
-        &type_info,
-    ) {
-        Ok(isa_config) => isa_config,
-        Err(msg) => anyhow::bail!(msg),
-    };
-
+    let (matches, arch) = opts::parse::<B64>(&mut hasher, &opts);
+    let opts::CommonOpts {
+        num_threads: _,
+        mut arch,
+        symtab,
+        type_info,
+        isa_config,
+        source_path: _,
+    } = opts::parse_with_arch(&mut hasher, &opts, &matches, &arch);
     let use_model_reg_init = true;
     let iarch = initialize_architecture(
         &mut arch,
@@ -184,14 +158,16 @@ fn main() -> anyhow::Result<()> {
 
         // ISLA trace.
         let paths = trace_opcode(opcode, &iarch)?;
+        println!("num paths = {}", paths.len());
 
         // Dump.
         for events in paths {
-            let events = if options.filter {
+            let events = if matches.opt_present("filter") {
                 tree_shake(&events)
             } else {
                 events
             };
+            println!("");
             write_events(&events, &iarch)?;
         }
     }
@@ -232,7 +208,7 @@ fn trace_opcode<'ir, B: BV>(
 
     let opcode_val = Val::Bits(B::from_u32(opcode));
 
-    let footprint_function = "zisla_footprint";
+    let footprint_function = "zisla_footprint_no_init";
     let function_id = shared_state.symtab.lookup(&footprint_function);
     let (args, ret_ty, instrs) = shared_state.functions.get(&function_id).unwrap();
     let memory = Memory::new();
@@ -520,32 +496,4 @@ fn write_events<'ir, B: BV>(
     handle.flush().unwrap();
 
     Ok(())
-}
-
-fn parse_ir<'a, 'input, B: BV>(
-    contents: &'input str,
-    symtab: &'a mut Symtab<'input>,
-) -> anyhow::Result<Vec<Def<Name, B>>> {
-    match ir_parser::IrParser::new().parse(symtab, new_ir_lexer(&contents)) {
-        Ok(ir) => Ok(ir),
-        Err(_) => Err(anyhow::Error::msg("bad")),
-    }
-}
-
-/// Read an entire file into a string.
-fn read_to_string<P: AsRef<Path>>(path: P) -> anyhow::Result<String> {
-    let mut buffer = String::new();
-    let path = path.as_ref();
-    if path == Path::new("-") {
-        let stdin = io::stdin();
-        let mut stdin = stdin.lock();
-        stdin
-            .read_to_string(&mut buffer)
-            .context("failed to read stdin to string")?;
-    } else {
-        let mut file = File::open(path)?;
-        file.read_to_string(&mut buffer)
-            .with_context(|| format!("failed to read {} to string", path.display()))?;
-    }
-    Ok(buffer)
 }
