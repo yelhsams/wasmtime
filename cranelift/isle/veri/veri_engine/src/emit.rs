@@ -480,12 +480,20 @@ fn tree_shake<B: BV>(events: &Vec<Event<B>>) -> Vec<Event<B>> {
         }
     }
 
-    events
+    // Filter down to live events.
+    let mut events: Vec<_> = events
         .iter()
         .enumerate()
         .filter_map(|(i, event)| if live.contains(&i) { Some(event) } else { None })
         .cloned()
-        .collect()
+        .collect();
+
+    // Simplify pass.
+    events.reverse();
+    simplify::propagate_forwards_used_once(&mut events);
+    events.reverse();
+
+    events
 }
 
 fn write_events<'ir, B: BV>(
