@@ -26,6 +26,7 @@ impl Defs {
 impl Def {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
+            Def::Pragma(_) => unimplemented!("pragmas not supported"),
             Def::Type(ref t) => sexp(vec![RcDoc::text("type"), t.name.to_doc(), t.ty.to_doc()]),
             Def::Rule(ref r) => {
                 let mut parts = Vec::new();
@@ -72,8 +73,22 @@ impl Def {
                 parts.push(sexp(
                     Vec::from([s.term.to_doc()])
                         .into_iter()
-                        .chain(s.args.iter().map(|v| v.to_doc())),
+                        .chain(s.args.iter().map(|a| a.to_doc())),
                 ));
+                if !s.provides.is_empty() {
+                    parts.push(sexp(
+                        Vec::from([RcDoc::text("provide")])
+                            .into_iter()
+                            .chain(s.provides.iter().map(|e| e.to_doc())),
+                    ));
+                }
+                if !s.requires.is_empty() {
+                    parts.push(sexp(
+                        Vec::from([RcDoc::text("require")])
+                            .into_iter()
+                            .chain(s.requires.iter().map(|e| e.to_doc())),
+                    ));
+                }
                 sexp(parts)
             }
             Def::Model(ref m) => sexp(vec![RcDoc::text("model"), m.name.to_doc(), m.val.to_doc()]),
@@ -99,7 +114,6 @@ impl Def {
                 c.outer_ty.to_doc(),
                 c.term.to_doc(),
             ]),
-            _ => todo!("def: {:?}", self),
         }
     }
 }
@@ -161,8 +175,10 @@ impl ModelValue {
 impl ModelType {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
+            ModelType::Int => RcDoc::text("Int"),
+            ModelType::Bool => RcDoc::text("Bool"),
             ModelType::BitVec(Some(size)) => sexp(vec![RcDoc::text("bv"), RcDoc::as_string(size)]),
-            _ => todo!("model type: {:?}", self),
+            ModelType::BitVec(None) => sexp(vec![RcDoc::text("bv")]),
         }
     }
 }
@@ -186,12 +202,78 @@ impl SpecExpr {
         match self {
             SpecExpr::ConstInt { val, .. } => RcDoc::as_string(val),
             SpecExpr::ConstBitVec { val, width, .. } => RcDoc::text(if width % 4 == 0 {
-                format!("#x{val:width$x}", width = *width as usize / 4)
+                format!("#x{val:0width$x}", width = *width as usize / 4)
             } else {
-                format!("#b{val:width$b}", width = *width as usize)
+                format!("#b{val:0width$b}", width = *width as usize)
             }),
-            _ => todo!("spec expr: {:?}", self),
+            SpecExpr::ConstBool { val, .. } => {
+                RcDoc::text(if *val != 0 { "true" } else { "false" })
+            }
+            SpecExpr::Var { var, .. } => var.to_doc(),
+            SpecExpr::Op { op, args, .. } => sexp(
+                Vec::from([op.to_doc()])
+                    .into_iter()
+                    .chain(args.iter().map(|a| a.to_doc())),
+            ),
+            SpecExpr::Pair { l, r } => sexp(vec![l.to_doc(), r.to_doc()]),
+            SpecExpr::Enum { name } => sexp(vec![name.to_doc()]),
         }
+    }
+}
+
+impl SpecOp {
+    fn to_doc(&self) -> RcDoc<()> {
+        RcDoc::text(match self {
+            SpecOp::Eq => "=",
+            SpecOp::And => "and",
+            SpecOp::Not => "not",
+            SpecOp::Or => "or",
+            SpecOp::Lte => "<=",
+            SpecOp::Lt => "<",
+            SpecOp::Gte => ">=",
+            SpecOp::Gt => ">",
+            SpecOp::BVNot => "bvnot",
+            SpecOp::BVAnd => "bvand",
+            SpecOp::BVOr => "bvor",
+            SpecOp::BVXor => "bvxor",
+            SpecOp::BVNeg => "bvneg",
+            SpecOp::BVAdd => "bvadd",
+            SpecOp::BVSub => "bvsub",
+            SpecOp::BVMul => "bvmul",
+            SpecOp::BVUdiv => "bvudiv",
+            SpecOp::BVUrem => "bvurem",
+            SpecOp::BVSdiv => "bvsdiv",
+            SpecOp::BVSrem => "bvsrem",
+            SpecOp::BVShl => "bvshl",
+            SpecOp::BVLshr => "bvlshr",
+            SpecOp::BVAshr => "bvashr",
+            SpecOp::BVSaddo => "bvsaddo",
+            SpecOp::BVUle => "bvule",
+            SpecOp::BVUlt => "bvult",
+            SpecOp::BVUgt => "bvugt",
+            SpecOp::BVUge => "bvuge",
+            SpecOp::BVSlt => "bvslt",
+            SpecOp::BVSle => "bvsle",
+            SpecOp::BVSgt => "bvsgt",
+            SpecOp::BVSge => "bvsge",
+            SpecOp::Rotr => "rotr",
+            SpecOp::Rotl => "rotl",
+            SpecOp::Extract => "extract",
+            SpecOp::ZeroExt => "zero_ext",
+            SpecOp::SignExt => "sign_ext",
+            SpecOp::Concat => "concat",
+            SpecOp::ConvTo => "conv_to",
+            SpecOp::Int2BV => "int2bv",
+            SpecOp::BV2Int => "bv2int",
+            SpecOp::WidthOf => "widthof",
+            SpecOp::If => "if",
+            SpecOp::Switch => "switch",
+            SpecOp::Subs => "subs",
+            SpecOp::Popcnt => "popcnt",
+            SpecOp::Rev => "rev",
+            SpecOp::Cls => "cls",
+            SpecOp::Clz => "clz",
+        })
     }
 }
 
@@ -212,7 +294,12 @@ impl Pattern {
                     .into_iter()
                     .chain(args.iter().map(|f| f.to_doc())),
             ),
-            _ => todo!("pattern: {:?}", self),
+            Pattern::And { subpats, .. } => sexp(
+                Vec::from([RcDoc::text("and")])
+                    .into_iter()
+                    .chain(subpats.iter().map(|p| p.to_doc())),
+            ),
+            Pattern::MacroArg { .. } => unimplemented!("macro arguments are for internal use only"),
         }
     }
 }
