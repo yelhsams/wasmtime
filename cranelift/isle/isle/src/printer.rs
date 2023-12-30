@@ -38,7 +38,7 @@ impl Def {
                     parts.push(RcDoc::as_string(prio));
                 }
                 parts.push(r.pattern.to_doc());
-                // TODO(mbm): if-lets
+                parts.extend(r.iflets.iter().map(|il| il.to_doc()));
                 parts.push(r.expr.to_doc());
                 sexp(parts)
             }
@@ -301,6 +301,17 @@ impl Pattern {
             ),
             Pattern::MacroArg { .. } => unimplemented!("macro arguments are for internal use only"),
         }
+    }
+}
+
+impl IfLet {
+    fn to_doc(&self) -> RcDoc<()> {
+        // TODO(mbm): `if` shorthand when pattern is wildcard
+        sexp(vec![
+            RcDoc::text("if-let"),
+            self.pattern.to_doc(),
+            self.expr.to_doc(),
+        ])
     }
 }
 
