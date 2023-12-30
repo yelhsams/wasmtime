@@ -26,8 +26,8 @@ struct RuleParseTree {
     bv_constraints: HashSet<TypeExpr>,
 
     ty_vars: HashMap<veri_ir::Expr, u32>,
-    quantified_vars: HashSet<(String, u32)>,
-    free_vars: HashSet<(String, u32)>,
+    quantified_vars: HashMap<String, u32>,
+    free_vars: HashMap<String, u32>,
     // Used to check distinct models
     term_input_bvs: Vec<String>,
     // Used for custom verification conditions
@@ -178,8 +178,8 @@ fn type_annotations_using_rule<'a>(
         var_constraints: HashSet::new(),
         bv_constraints: HashSet::new(),
         ty_vars: HashMap::new(),
-        quantified_vars: HashSet::new(),
-        free_vars: HashSet::new(),
+        quantified_vars: HashMap::new(),
+        free_vars: HashMap::new(),
         term_input_bvs: vec![],
         term_args: vec![],
         assumptions: vec![],
@@ -380,6 +380,13 @@ fn add_annotation_constraints(
                 tree.next_type_var += 1;
             }
             let name = format!("{}__{}__{}", annotation_info.term, x, t);
+
+            // Support the introduction of extra variables in the specification.
+            //
+            // TODO(mbm): understand whether this needs to be in quantified, free or both?
+            tree.quantified_vars.insert(name.clone(), t);
+            tree.free_vars.insert(name.clone(), t);
+
             (veri_ir::Expr::Terminal(veri_ir::Terminal::Var(name)), t)
         }
         annotation_ir::Expr::Const(c, ..) => {
@@ -1362,8 +1369,6 @@ fn add_annotation_constraints(
         _ => todo!("expr {:#?} not yet implemented", expr),
     };
     tree.ty_vars.insert(e.clone(), t);
-    // let fmt = format!("{}:\t{:?}", t, e);
-    // dbg!(fmt);
     (e, t)
 }
 
@@ -1445,8 +1450,8 @@ fn add_rule_constraints(
     let e = match &curr.construct {
         TypeVarConstruct::Var => {
             tree.quantified_vars
-                .insert((curr.ident.clone(), curr.type_var));
-            tree.free_vars.insert((curr.ident.clone(), curr.type_var));
+                .insert(curr.ident.clone(), curr.type_var);
+            tree.free_vars.insert(curr.ident.clone(), curr.type_var);
             Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(
                 curr.ident.clone(),
             )))
@@ -1475,7 +1480,7 @@ fn add_rule_constraints(
         }
         TypeVarConstruct::And => {
             tree.quantified_vars
-                .insert((curr.ident.clone(), curr.type_var));
+                .insert(curr.ident.clone(), curr.type_var);
             let first = &children[0];
             for (i, e) in children.iter().enumerate() {
                 if i != 0 {
@@ -1490,7 +1495,7 @@ fn add_rule_constraints(
         }
         TypeVarConstruct::Let(bound) => {
             tree.quantified_vars
-                .insert((curr.ident.clone(), curr.type_var));
+                .insert(curr.ident.clone(), curr.type_var);
             for (e, s) in children.iter().zip(bound) {
                 tree.assumptions.push(veri_ir::Expr::Binary(
                     veri_ir::BinaryOp::Eq,
@@ -1510,7 +1515,7 @@ fn add_rule_constraints(
             print!(" {}", term_name);
 
             tree.quantified_vars
-                .insert((curr.ident.clone(), curr.type_var));
+                .insert(curr.ident.clone(), curr.type_var);
             let a = annotation_env.get_annotation_for_term(term_id);
             if a.is_none() {
                 println!("\nSkipping rule with unannotated term: {}", term_name);
@@ -1601,7 +1606,7 @@ fn add_rule_constraints(
                     annotation_info.term, arg.name, annotation_type_var
                 );
                 tree.quantified_vars
-                    .insert((arg_name.clone(), annotation_type_var));
+                    .insert(arg_name.clone(), annotation_type_var);
                 tree.assumptions.push(veri_ir::Expr::Binary(
                     veri_ir::BinaryOp::Eq,
                     Box::new(child.clone()),
@@ -1616,7 +1621,7 @@ fn add_rule_constraints(
                 "{}__{}__{}",
                 annotation_info.term, annotation.sig.ret.name, ret_var
             );
-            tree.quantified_vars.insert((ret_name.clone(), ret_var));
+            tree.quantified_vars.insert(ret_name.clone(), ret_var);
             tree.assumptions.push(veri_ir::Expr::Binary(
                 veri_ir::BinaryOp::Eq,
                 Box::new(veri_ir::Expr::Terminal(veri_ir::Terminal::Var(
@@ -2258,7 +2263,7 @@ fn create_parse_tree_expr(
                 tree.varid_to_type_var_map.insert(*varid, ty_var);
                 children.push(subpat_node);
                 let ident = format!("{}__clif{}__{}", var, varid.index(), ty_var);
-                tree.quantified_vars.insert((ident.clone(), ty_var));
+                tree.quantified_vars.insert(ident.clone(), ty_var);
                 bound.push(ident);
             }
             let body = create_parse_tree_expr(rule, body, tree, typeenv, termenv);
