@@ -99,7 +99,7 @@ impl Def {
                 sexp(parts)
             }
             Def::Instantiation(ref i) => {
-                let mut parts = vec![RcDoc::text("instatiate"), i.term.to_doc()];
+                let mut parts = vec![RcDoc::text("instantiate"), i.term.to_doc()];
                 if let Some(form) = &i.form {
                     parts.push(form.to_doc());
                 } else {
@@ -330,7 +330,7 @@ impl Expr {
             Expr::Let { defs, body, .. } => {
                 let mut parts = Vec::new();
                 parts.push(RcDoc::text("let"));
-                parts.extend(defs.iter().map(|d| d.to_doc()));
+                parts.push(sexp(defs.iter().map(|d| d.to_doc())));
                 parts.push(body.to_doc());
                 sexp(parts)
             }
@@ -370,7 +370,7 @@ impl Extern {
             Extern::Const { name, ty, .. } => sexp(vec![
                 RcDoc::text("extern"),
                 RcDoc::text("const"),
-                name.to_doc(),
+                RcDoc::text(format!("${}", name.0)),
                 ty.to_doc(),
             ]),
         }

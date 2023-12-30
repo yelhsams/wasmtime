@@ -75,6 +75,12 @@ pub fn run_print(isle_filename: &str) {
     // Print.
     let mut buf = BufWriter::new(Vec::new());
     printer::print(&defs, 78, &mut buf).unwrap();
+    let bytes = buf.into_inner().unwrap();
+    let isle_source = String::from_utf8(bytes).unwrap();
+
+    // Round trip.
+    let lexer = lexer::Lexer::from_str(&isle_source, "<string>").unwrap();
+    let _round_trip = parser::parse(lexer).unwrap();
 }
 
 pub fn run_run(isle_filename: &str) {
