@@ -2,7 +2,11 @@
 
 use cranelift_isle::compile;
 use cranelift_isle::error::Errors;
+use cranelift_isle::lexer;
+use cranelift_isle::parser;
+use cranelift_isle::printer;
 use std::default::Default;
+use std::io::BufWriter;
 
 fn build(filename: &str) -> Result<String, Errors> {
     compile::from_files(&[filename], &Default::default())
@@ -61,6 +65,16 @@ fn build_and_link_isle(isle_filename: &str) -> (tempfile::TempDir, std::path::Pa
 
 pub fn run_link(isle_filename: &str) {
     build_and_link_isle(isle_filename);
+}
+
+pub fn run_print(isle_filename: &str) {
+    // Parse.
+    let lexer = lexer::Lexer::from_files(&[isle_filename]).unwrap();
+    let defs = parser::parse(lexer).unwrap();
+
+    // Print.
+    let mut buf = BufWriter::new(Vec::new());
+    printer::print(&defs, 78, &mut buf).unwrap();
 }
 
 pub fn run_run(isle_filename: &str) {

@@ -367,7 +367,12 @@ impl Extern {
                 term.to_doc(),
                 func.to_doc(),
             ]),
-            _ => todo!("extern: {:?}", self),
+            Extern::Const { name, ty, .. } => sexp(vec![
+                RcDoc::text("extern"),
+                RcDoc::text("const"),
+                name.to_doc(),
+                ty.to_doc(),
+            ]),
         }
     }
 }
