@@ -4,7 +4,7 @@
 
 use crate::ast::*;
 use crate::error::Errors;
-use pretty::{Doc, RcDoc};
+use pretty::{Doc, Pretty, RcAllocator, RcDoc};
 use std::io::Write;
 
 pub fn print<W>(defs: &Defs, width: usize, out: &mut W) -> Result<(), Errors>
@@ -26,17 +26,8 @@ impl Defs {
 impl Def {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
-            Def::Type(t) => RcDoc::text("(")
-                .append(
-                    RcDoc::intersperse(
-                        vec![RcDoc::text("type"), t.name.to_doc(), t.ty.to_doc()],
-                        Doc::line(),
-                    )
-                    .nest(4)
-                    .group(),
-                )
-                .append(RcDoc::text(")")),
-            _ => RcDoc::as_string("def"),
+            Def::Type(ref t) => sexp(vec![RcDoc::text("type"), t.name.to_doc(), t.ty.to_doc()]),
+            _ => RcDoc::as_string("TODO"),
         }
     }
 }
@@ -49,6 +40,42 @@ impl Ident {
 
 impl TypeValue {
     fn to_doc(&self) -> RcDoc<()> {
-        RcDoc::text("type_value")
+        match self {
+            TypeValue::Primitive(ref name, _) => {
+                sexp(vec![RcDoc::text("primitive"), name.to_doc()])
+            }
+            TypeValue::Enum(ref variants, _) => sexp(
+                Vec::from([RcDoc::text("enum")])
+                    .into_iter()
+                    .chain(variants.iter().map(|v| v.to_doc())),
+            ),
+        }
     }
+}
+
+impl Variant {
+    fn to_doc(&self) -> RcDoc<()> {
+        sexp(
+            Vec::from([self.name.to_doc()])
+                .into_iter()
+                .chain(self.fields.iter().map(|f| f.to_doc())),
+        )
+    }
+}
+
+impl Field {
+    fn to_doc(&self) -> RcDoc<()> {
+        sexp(vec![self.name.to_doc(), self.ty.to_doc()])
+    }
+}
+
+fn sexp<'a, I, A>(docs: I) -> RcDoc<'a, A>
+where
+    I: IntoIterator,
+    I::Item: Pretty<'a, RcAllocator, A>,
+    A: Clone,
+{
+    RcDoc::text("(")
+        .append(RcDoc::intersperse(docs, Doc::line()).nest(4).group())
+        .append(RcDoc::text(")"))
 }
