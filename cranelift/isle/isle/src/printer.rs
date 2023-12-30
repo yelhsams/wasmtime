@@ -27,7 +27,18 @@ impl Def {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             Def::Pragma(_) => unimplemented!("pragmas not supported"),
-            Def::Type(ref t) => sexp(vec![RcDoc::text("type"), t.name.to_doc(), t.ty.to_doc()]),
+            Def::Type(ref t) => {
+                let mut parts = vec![RcDoc::text("type")];
+                parts.push(t.name.to_doc());
+                if t.is_extern {
+                    parts.push(RcDoc::text("extern"));
+                }
+                if t.is_nodebug {
+                    parts.push(RcDoc::text("nodebug"));
+                }
+                parts.push(t.ty.to_doc());
+                sexp(parts)
+            }
             Def::Rule(ref r) => {
                 let mut parts = Vec::new();
                 parts.push(RcDoc::text("rule"));
@@ -286,7 +297,7 @@ impl Pattern {
                 Doc::space(),
             ),
             Pattern::ConstInt { val, .. } => RcDoc::as_string(val),
-            Pattern::ConstPrim { val, .. } => val.to_doc(),
+            Pattern::ConstPrim { val, .. } => RcDoc::text("$").append(val.to_doc()),
             Pattern::Wildcard { .. } => RcDoc::text("_"),
             Pattern::Term { sym, args, .. } => sexp(
                 // TODO(mbm): convenience for sexp with a fixed first element
@@ -326,7 +337,7 @@ impl Expr {
             ),
             Expr::Var { name, .. } => name.to_doc(),
             Expr::ConstInt { val, .. } => RcDoc::as_string(val),
-            Expr::ConstPrim { val, .. } => val.to_doc(),
+            Expr::ConstPrim { val, .. } => RcDoc::text("$").append(val.to_doc()),
             Expr::Let { defs, body, .. } => {
                 let mut parts = Vec::new();
                 parts.push(RcDoc::text("let"));
@@ -370,7 +381,7 @@ impl Extern {
             Extern::Const { name, ty, .. } => sexp(vec![
                 RcDoc::text("extern"),
                 RcDoc::text("const"),
-                RcDoc::text(format!("${}", name.0)),
+                RcDoc::text("$").append(name.to_doc()),
                 ty.to_doc(),
             ]),
         }
