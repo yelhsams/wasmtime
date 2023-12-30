@@ -67,11 +67,31 @@ impl Def {
                 parts.push(d.ret_ty.to_doc());
                 sexp(parts)
             }
-            // TODO: Spec(Spec),
-            // TODO: Model(Model),
-            // TODO: Form(Form),
-            // TODO: Instantiation(Instantiation),
-            // TODO: Extern(Extern),
+            Def::Spec(ref s) => {
+                let mut parts = vec![RcDoc::text("spec")];
+                parts.push(sexp(
+                    Vec::from([s.term.to_doc()])
+                        .into_iter()
+                        .chain(s.args.iter().map(|v| v.to_doc())),
+                ));
+                sexp(parts)
+            }
+            Def::Model(ref m) => sexp(vec![RcDoc::text("model"), m.name.to_doc(), m.val.to_doc()]),
+            Def::Form(ref f) => {
+                let mut parts = vec![RcDoc::text("form")];
+                parts.push(f.name.to_doc());
+                parts.extend(f.signatures.iter().map(|s| s.to_doc()));
+                sexp(parts)
+            }
+            Def::Instantiation(ref i) => {
+                let mut parts = vec![RcDoc::text("instatiate"), i.term.to_doc()];
+                if let Some(form) = &i.form {
+                    parts.push(form.to_doc());
+                } else {
+                    parts.extend(i.signatures.iter().map(|s| s.to_doc()));
+                }
+                sexp(parts)
+            }
             Def::Extern(ref e) => e.to_doc(),
             Def::Converter(ref c) => sexp(vec![
                 RcDoc::text("convert"),
@@ -120,6 +140,58 @@ impl Variant {
 impl Field {
     fn to_doc(&self) -> RcDoc<()> {
         sexp(vec![self.name.to_doc(), self.ty.to_doc()])
+    }
+}
+
+impl ModelValue {
+    fn to_doc(&self) -> RcDoc<()> {
+        match self {
+            ModelValue::TypeValue(ref mt) => sexp(vec![RcDoc::text("type"), mt.to_doc()]),
+            ModelValue::EnumValues(ref values) => sexp(
+                Vec::from([RcDoc::text("enum")]).into_iter().chain(
+                    values
+                        .iter()
+                        .map(|(name, expr)| sexp(vec![name.to_doc(), expr.to_doc()])),
+                ),
+            ),
+        }
+    }
+}
+
+impl ModelType {
+    fn to_doc(&self) -> RcDoc<()> {
+        match self {
+            ModelType::BitVec(Some(size)) => sexp(vec![RcDoc::text("bv"), RcDoc::as_string(size)]),
+            _ => todo!("model type: {:?}", self),
+        }
+    }
+}
+
+impl Signature {
+    fn to_doc(&self) -> RcDoc<()> {
+        sexp(vec![
+            sexp(
+                Vec::from([RcDoc::text("args")])
+                    .into_iter()
+                    .chain(self.args.iter().map(|a| a.to_doc())),
+            ),
+            sexp(vec![RcDoc::text("ret"), self.ret.to_doc()]),
+            sexp(vec![RcDoc::text("canon"), self.canonical.to_doc()]),
+        ])
+    }
+}
+
+impl SpecExpr {
+    fn to_doc(&self) -> RcDoc<()> {
+        match self {
+            SpecExpr::ConstInt { val, .. } => RcDoc::as_string(val),
+            SpecExpr::ConstBitVec { val, width, .. } => RcDoc::text(if width % 4 == 0 {
+                format!("#x{val:width$x}", width = *width as usize / 4)
+            } else {
+                format!("#b{val:width$b}", width = *width as usize)
+            }),
+            _ => todo!("spec expr: {:?}", self),
+        }
     }
 }
 
