@@ -41,7 +41,15 @@ impl Def {
                 parts.push(r.expr.to_doc());
                 sexp(parts)
             }
-            // TODO: Extractor(Extractor),
+            Def::Extractor(ref e) => sexp(vec![
+                RcDoc::text("extractor"),
+                sexp(
+                    Vec::from([e.term.to_doc()])
+                        .into_iter()
+                        .chain(e.args.iter().map(|v| v.to_doc())),
+                ),
+                e.template.to_doc(),
+            ]),
             Def::Decl(ref d) => {
                 let mut parts = Vec::new();
                 parts.push(RcDoc::text("decl"));
@@ -65,7 +73,12 @@ impl Def {
             // TODO: Instantiation(Instantiation),
             // TODO: Extern(Extern),
             Def::Extern(ref e) => e.to_doc(),
-            // TODO: Converter(Converter),
+            Def::Converter(ref c) => sexp(vec![
+                RcDoc::text("convert"),
+                c.inner_ty.to_doc(),
+                c.outer_ty.to_doc(),
+                c.term.to_doc(),
+            ]),
             _ => todo!("def: {:?}", self),
         }
     }
@@ -178,6 +191,12 @@ impl Extern {
                 parts.push(func.to_doc());
                 sexp(parts)
             }
+            Extern::Constructor { term, func, .. } => sexp(vec![
+                RcDoc::text("extern"),
+                RcDoc::text("constructor"),
+                term.to_doc(),
+                func.to_doc(),
+            ]),
             _ => todo!("extern: {:?}", self),
         }
     }
