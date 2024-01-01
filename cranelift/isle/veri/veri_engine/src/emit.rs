@@ -4,6 +4,9 @@ use cranelift_codegen::settings;
 use cranelift_codegen::AllocationConsumer;
 use cranelift_codegen::MachBuffer;
 use cranelift_codegen::MachInstEmit;
+use cranelift_isle::ast::Ident;
+use cranelift_isle::ast::{SpecExpr, SpecOp};
+use cranelift_isle::lexer::Pos;
 use crossbeam::queue::SegQueue;
 use isla::opts;
 use isla_lib::bitvector::{b64::B64, BV};
@@ -155,6 +158,7 @@ fn main() -> anyhow::Result<()> {
         println!("inst = {inst:?}");
         println!("opcode = {opcode:08x}");
         println!("asm = {asm}");
+        println!("");
 
         // ISLA trace.
         let paths = trace_opcode(opcode, &iarch)?;
@@ -167,8 +171,13 @@ fn main() -> anyhow::Result<()> {
             } else {
                 events
             };
-            println!("");
             write_events(&events, &iarch)?;
+
+            // Generate spec.
+            let spec = trace_to_spec(&events);
+            println!("spec = {spec:?}");
+
+            println!("");
         }
     }
 
@@ -506,4 +515,138 @@ fn write_events<'ir, B: BV>(
     handle.flush().unwrap();
 
     Ok(())
+}
+
+struct TypeContext {
+    ty: HashMap<smt::Sym, smtlib::Ty>,
+    fun: HashMap<smt::Sym, (Vec<smtlib::Ty>, smtlib::Ty)>,
+}
+
+impl TypeContext {
+    fn new() -> TypeContext {
+        TypeContext {
+            ty: HashMap::new(),
+            fun: HashMap::new(),
+        }
+    }
+
+    fn infer(&self, exp: &smtlib::Exp<smt::Sym>) -> Option<smtlib::Ty> {
+        exp.infer(&self.ty, &self.fun)
+    }
+}
+
+fn trace_to_spec<B: BV>(events: &Vec<Event<B>>) -> Vec<SpecExpr> {
+    let mut tctx = TypeContext::new();
+    events
+        .iter()
+        .filter_map(|e| event_to_spec(e, &mut tctx))
+        .collect()
+}
+
+fn event_to_spec<B: BV>(event: &Event<B>, tctx: &mut TypeContext) -> Option<SpecExpr> {
+    match event {
+        Event::Smt(def, attr, ..) if !attr.is_uninteresting() => smt_to_spec(def, tctx),
+        _ => None,
+    }
+}
+
+fn smt_to_spec(def: &smtlib::Def, tctx: &mut TypeContext) -> Option<SpecExpr> {
+    match def {
+        smtlib::Def::DefineConst(sym, exp) => Some(SpecExpr::Op {
+            op: SpecOp::Eq,
+            args: vec![
+                exp_to_spec(&smtlib::Exp::Var(*sym), tctx),
+                exp_to_spec(exp, tctx),
+            ],
+            pos: Pos::default(),
+        }),
+
+        smtlib::Def::DeclareConst(v, ty) => {
+            tctx.ty.insert(*v, ty.clone());
+            None
+        }
+
+        smtlib::Def::DeclareFun(v, params, ret) => {
+            tctx.fun.insert(*v, (params.clone(), ret.clone()));
+            None
+        }
+
+        smtlib::Def::DefineEnum(..) => None,
+
+        _ => todo!("smt def: {:?}", def),
+    }
+}
+
+fn exp_to_spec(exp: &smtlib::Exp<smt::Sym>, tctx: &TypeContext) -> SpecExpr {
+    use smtlib::Exp::*;
+    match exp {
+        Var(v) => SpecExpr::Var {
+            var: Ident(format!("v{}", v), Pos::default()),
+            pos: Pos::default(),
+        },
+
+        // Bits(Vec<bool>),
+        // Bits64(B64),
+        // Enum(EnumMember),
+        // Bool(bool),
+        // Eq(Box<Exp<V>>, Box<Exp<V>>),
+        // Neq(Box<Exp<V>>, Box<Exp<V>>),
+        // And(Box<Exp<V>>, Box<Exp<V>>),
+        // Or(Box<Exp<V>>, Box<Exp<V>>),
+        // Not(Box<Exp<V>>),
+        // Bvnot(Box<Exp<V>>),
+        // Bvand(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvor(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvxor(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvnand(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvnor(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvxnor(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvneg(Box<Exp<V>>),
+        // Bvadd(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvsub(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvmul(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvudiv(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvsdiv(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvurem(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvsrem(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvsmod(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvult(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvslt(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvule(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvsle(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvuge(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvsge(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvugt(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvsgt(Box<Exp<V>>, Box<Exp<V>>),
+        // Extract(u32, u32, Box<Exp<V>>),
+        ZeroExtend(n, exp) => match tctx.infer(exp).unwrap() {
+            smtlib::Ty::BitVec(w) => SpecExpr::Op {
+                op: SpecOp::ZeroExt,
+                args: vec![SpecExpr::ConstInt {
+                    val: (n + w).try_into().unwrap(),
+                    pos: Pos::default(),
+                }],
+                pos: Pos::default(),
+            },
+            _ => panic!("zero extend applies to bitvector types"),
+        },
+        // SignExtend(u32, Box<Exp<V>>),
+        // Bvshl(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvlshr(Box<Exp<V>>, Box<Exp<V>>),
+        // Bvashr(Box<Exp<V>>, Box<Exp<V>>),
+        // Concat(Box<Exp<V>>, Box<Exp<V>>),
+        // Ite(Box<Exp<V>>, Box<Exp<V>>, Box<Exp<V>>),
+        // App(Sym, Vec<Exp<V>>),
+        // Select(Box<Exp<V>>, Box<Exp<V>>),
+        // Store(Box<Exp<V>>, Box<Exp<V>>, Box<Exp<V>>),
+        // Distinct(Vec<Exp<V>>),
+        // FPConstant(FPConstant, u32, u32),
+        // FPRoundingMode(FPRoundingMode),
+        // FPUnary(FPUnary, Box<Exp<V>>),
+        // FPRoundingUnary(FPRoundingUnary, Box<Exp<V>>, Box<Exp<V>>),
+        // FPBinary(FPBinary, Box<Exp<V>>, Box<Exp<V>>),
+        // FPRoundingBinary(FPRoundingBinary, Box<Exp<V>>, Box<Exp<V>>, Box<Exp<V>>),
+        // FPfma(Box<Exp<V>>, Box<Exp<V>>, Box<Exp<V>>, Box<Exp<V>>),
+        _ => todo!("expression: {:?}", exp),
+    }
 }
