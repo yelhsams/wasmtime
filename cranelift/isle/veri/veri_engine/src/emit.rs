@@ -748,19 +748,20 @@ fn spec_const_bit_vector(val: i128, width: i8) -> SpecExpr {
 }
 
 fn spec_bits(bits: &[bool]) -> SpecExpr {
-    let width = bits.len();
-    if width >= 128 {
-        todo!("support width 128+ bit vectors")
-    }
-
-    let mut val: i128 = 0;
-    for (i, bit) in bits.iter().enumerate() {
-        if *bit {
-            val |= 1 << i;
-        }
-    }
-
-    spec_const_bit_vector(val, width.try_into().unwrap())
+    // TODO(mbm): verify endianness assumption about Vec<bool> and test multi-chunk case
+    bits.chunks(64)
+        .map(|chunk| {
+            let mut val: i128 = 0;
+            for (i, bit) in chunk.iter().enumerate() {
+                if *bit {
+                    val |= 1 << i;
+                }
+            }
+            spec_const_bit_vector(val, 64)
+        })
+        .rev()
+        .reduce(|acc, bv| spec_binary(SpecOp::Concat, acc, bv))
+        .unwrap()
 }
 
 fn spec_unary(op: SpecOp, x: SpecExpr) -> SpecExpr {
