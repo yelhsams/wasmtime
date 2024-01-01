@@ -552,14 +552,19 @@ fn event_to_spec<B: BV>(event: &Event<B>, tctx: &mut TypeContext) -> Option<Spec
 
 fn smt_to_spec(def: &smtlib::Def, tctx: &mut TypeContext) -> Option<SpecExpr> {
     match def {
-        smtlib::Def::DefineConst(sym, exp) => Some(SpecExpr::Op {
-            op: SpecOp::Eq,
-            args: vec![
-                exp_to_spec(&smtlib::Exp::Var(*sym), tctx),
-                exp_to_spec(exp, tctx),
-            ],
-            pos: Pos::default(),
-        }),
+        smtlib::Def::DefineConst(v, exp) => {
+            let ty = tctx.infer(exp).expect("SMT expression was badly-typed");
+            tctx.ty.insert(*v, ty.clone());
+
+            Some(SpecExpr::Op {
+                op: SpecOp::Eq,
+                args: vec![
+                    exp_to_spec(&smtlib::Exp::Var(*v), tctx),
+                    exp_to_spec(exp, tctx),
+                ],
+                pos: Pos::default(),
+            })
+        }
 
         smtlib::Def::DeclareConst(v, ty) => {
             tctx.ty.insert(*v, ty.clone());
@@ -586,7 +591,11 @@ fn exp_to_spec(exp: &smtlib::Exp<smt::Sym>, tctx: &TypeContext) -> SpecExpr {
         },
 
         // Bits(Vec<bool>),
-        // Bits64(B64),
+        Bits(bits) => spec_bits(bits),
+        Bits64(bv) => spec_const_bit_vector(
+            bv.lower_u64().try_into().unwrap(),
+            bv.len().try_into().unwrap(),
+        ),
         // Enum(EnumMember),
         // Bool(bool),
         // Eq(Box<Exp<V>>, Box<Exp<V>>),
@@ -594,6 +603,8 @@ fn exp_to_spec(exp: &smtlib::Exp<smt::Sym>, tctx: &TypeContext) -> SpecExpr {
         // And(Box<Exp<V>>, Box<Exp<V>>),
         // Or(Box<Exp<V>>, Box<Exp<V>>),
         // Not(Box<Exp<V>>),
+        Not(exp) | Bvnot(exp) => spec_unary(exp_spec_op(exp), exp_to_spec(exp, tctx)),
+
         // Bvnot(Box<Exp<V>>),
         // Bvand(Box<Exp<V>>, Box<Exp<V>>),
         // Bvor(Box<Exp<V>>, Box<Exp<V>>),
@@ -601,11 +612,13 @@ fn exp_to_spec(exp: &smtlib::Exp<smt::Sym>, tctx: &TypeContext) -> SpecExpr {
         // Bvnor(Box<Exp<V>>, Box<Exp<V>>),
         // Bvxnor(Box<Exp<V>>, Box<Exp<V>>),
         // Bvneg(Box<Exp<V>>),
-        Bvxor(lhs, rhs) | Bvadd(lhs, rhs) | Bvsub(lhs, rhs) | Bvmul(lhs, rhs) => spec_binary(
-            exp_spec_op(exp),
-            exp_to_spec(lhs, tctx),
-            exp_to_spec(rhs, tctx),
-        ),
+        Bvxor(lhs, rhs) | Bvadd(lhs, rhs) | Bvsub(lhs, rhs) | Bvmul(lhs, rhs) | Bvshl(lhs, rhs) => {
+            spec_binary(
+                exp_spec_op(exp),
+                exp_to_spec(lhs, tctx),
+                exp_to_spec(rhs, tctx),
+            )
+        }
 
         // Bvudiv(Box<Exp<V>>, Box<Exp<V>>),
         // Bvsdiv(Box<Exp<V>>, Box<Exp<V>>),
@@ -637,7 +650,6 @@ fn exp_to_spec(exp: &smtlib::Exp<smt::Sym>, tctx: &TypeContext) -> SpecExpr {
         },
 
         // SignExtend(u32, Box<Exp<V>>),
-        // Bvshl(Box<Exp<V>>, Box<Exp<V>>),
         // Bvlshr(Box<Exp<V>>, Box<Exp<V>>),
         // Bvashr(Box<Exp<V>>, Box<Exp<V>>),
         // Concat(Box<Exp<V>>, Box<Exp<V>>),
@@ -669,6 +681,7 @@ fn exp_spec_op(exp: &smtlib::Exp<smt::Sym>) -> SpecOp {
         // And(Box<Exp<V>>, Box<Exp<V>>),
         // Or(Box<Exp<V>>, Box<Exp<V>>),
         // Not(Box<Exp<V>>),
+        Not(..) => SpecOp::Not,
         // Bvnot(Box<Exp<V>>),
         // Bvand(Box<Exp<V>>, Box<Exp<V>>),
         // Bvor(Box<Exp<V>>, Box<Exp<V>>),
@@ -695,7 +708,7 @@ fn exp_spec_op(exp: &smtlib::Exp<smt::Sym>) -> SpecOp {
         // Bvsgt(Box<Exp<V>>, Box<Exp<V>>),
 
         // SignExtend(u32, Box<Exp<V>>),
-        // Bvshl(Box<Exp<V>>, Box<Exp<V>>),
+        Bvshl(..) => SpecOp::BVShl,
         // Bvlshr(Box<Exp<V>>, Box<Exp<V>>),
         // Bvashr(Box<Exp<V>>, Box<Exp<V>>),
         // Concat(Box<Exp<V>>, Box<Exp<V>>),
@@ -721,6 +734,39 @@ where
 {
     SpecExpr::ConstInt {
         val: x.try_into().unwrap(),
+        pos: Pos::default(),
+    }
+}
+
+fn spec_const_bit_vector(val: i128, width: i8) -> SpecExpr {
+    assert!(width >= 0);
+    SpecExpr::ConstBitVec {
+        val,
+        width,
+        pos: Pos::default(),
+    }
+}
+
+fn spec_bits(bits: &[bool]) -> SpecExpr {
+    let width = bits.len();
+    if width >= 128 {
+        todo!("support width 128+ bit vectors")
+    }
+
+    let mut val: i128 = 0;
+    for (i, bit) in bits.iter().enumerate() {
+        if *bit {
+            val |= 1 << i;
+        }
+    }
+
+    spec_const_bit_vector(val, width.try_into().unwrap())
+}
+
+fn spec_unary(op: SpecOp, x: SpecExpr) -> SpecExpr {
+    SpecExpr::Op {
+        op,
+        args: vec![x],
         pos: Pos::default(),
     }
 }
