@@ -589,36 +589,37 @@ fn exp_to_spec(exp: &smtlib::Exp<smt::Sym>, tctx: &TypeContext) -> SpecExpr {
             var: Ident(format!("v{}", v), Pos::default()),
             pos: Pos::default(),
         },
-
-        // Bits(Vec<bool>),
         Bits(bits) => spec_bits(bits),
         Bits64(bv) => spec_const_bit_vector(
             bv.lower_u64().try_into().unwrap(),
             bv.len().try_into().unwrap(),
         ),
         // Enum(EnumMember),
-        // Bool(bool),
-        // Eq(Box<Exp<V>>, Box<Exp<V>>),
+        Bool(b) => spec_const_bool(*b),
         // Neq(Box<Exp<V>>, Box<Exp<V>>),
-        // And(Box<Exp<V>>, Box<Exp<V>>),
-        // Or(Box<Exp<V>>, Box<Exp<V>>),
-        // Not(Box<Exp<V>>),
-        Not(exp) | Bvnot(exp) => spec_unary(exp_spec_op(exp), exp_to_spec(exp, tctx)),
+        Not(x) | Bvnot(x) => spec_unary(exp_spec_op(exp), exp_to_spec(x, tctx)),
 
         // Bvnot(Box<Exp<V>>),
-        // Bvand(Box<Exp<V>>, Box<Exp<V>>),
-        // Bvor(Box<Exp<V>>, Box<Exp<V>>),
         // Bvnand(Box<Exp<V>>, Box<Exp<V>>),
         // Bvnor(Box<Exp<V>>, Box<Exp<V>>),
         // Bvxnor(Box<Exp<V>>, Box<Exp<V>>),
         // Bvneg(Box<Exp<V>>),
-        Bvxor(lhs, rhs) | Bvadd(lhs, rhs) | Bvsub(lhs, rhs) | Bvmul(lhs, rhs) | Bvshl(lhs, rhs) => {
-            spec_binary(
-                exp_spec_op(exp),
-                exp_to_spec(lhs, tctx),
-                exp_to_spec(rhs, tctx),
-            )
-        }
+        Eq(lhs, rhs)
+        | And(lhs, rhs)
+        | Or(lhs, rhs)
+        | Bvand(lhs, rhs)
+        | Bvor(lhs, rhs)
+        | Bvxor(lhs, rhs)
+        | Bvadd(lhs, rhs)
+        | Bvsub(lhs, rhs)
+        | Bvmul(lhs, rhs)
+        | Bvshl(lhs, rhs)
+        | Bvlshr(lhs, rhs)
+        | Concat(lhs, rhs) => spec_binary(
+            exp_spec_op(exp),
+            exp_to_spec(lhs, tctx),
+            exp_to_spec(rhs, tctx),
+        ),
 
         // Bvudiv(Box<Exp<V>>, Box<Exp<V>>),
         // Bvsdiv(Box<Exp<V>>, Box<Exp<V>>),
@@ -640,20 +641,24 @@ fn exp_to_spec(exp: &smtlib::Exp<smt::Sym>, tctx: &TypeContext) -> SpecExpr {
             exp_to_spec(exp, tctx),
         ),
 
-        ZeroExtend(n, exp) => match tctx.infer(exp).unwrap() {
+        ZeroExtend(n, x) | SignExtend(n, x) => match tctx.infer(x).unwrap() {
             smtlib::Ty::BitVec(w) => spec_binary(
-                SpecOp::ZeroExt,
+                exp_spec_op(exp),
                 spec_const_int(n + w),
-                exp_to_spec(exp, tctx),
+                exp_to_spec(x, tctx),
             ),
-            _ => panic!("zero extend applies to bitvector types"),
+            _ => panic!("extension applies to bitvector types"),
         },
 
-        // SignExtend(u32, Box<Exp<V>>),
         // Bvlshr(Box<Exp<V>>, Box<Exp<V>>),
         // Bvashr(Box<Exp<V>>, Box<Exp<V>>),
-        // Concat(Box<Exp<V>>, Box<Exp<V>>),
-        // Ite(Box<Exp<V>>, Box<Exp<V>>, Box<Exp<V>>),
+        Ite(c, t, e) => spec_ternary(
+            SpecOp::If,
+            exp_to_spec(c, tctx),
+            exp_to_spec(t, tctx),
+            exp_to_spec(e, tctx),
+        ),
+
         // App(Sym, Vec<Exp<V>>),
         // Select(Box<Exp<V>>, Box<Exp<V>>),
         // Store(Box<Exp<V>>, Box<Exp<V>>, Box<Exp<V>>),
@@ -676,15 +681,14 @@ fn exp_spec_op(exp: &smtlib::Exp<smt::Sym>) -> SpecOp {
         // Bits64(B64),
         // Enum(EnumMember),
         // Bool(bool),
-        // Eq(Box<Exp<V>>, Box<Exp<V>>),
+        Eq(..) => SpecOp::Eq,
         // Neq(Box<Exp<V>>, Box<Exp<V>>),
-        // And(Box<Exp<V>>, Box<Exp<V>>),
-        // Or(Box<Exp<V>>, Box<Exp<V>>),
-        // Not(Box<Exp<V>>),
+        And(..) => SpecOp::And,
+        Or(..) => SpecOp::Or,
         Not(..) => SpecOp::Not,
-        // Bvnot(Box<Exp<V>>),
-        // Bvand(Box<Exp<V>>, Box<Exp<V>>),
-        // Bvor(Box<Exp<V>>, Box<Exp<V>>),
+        Bvnot(..) => SpecOp::BVNot,
+        Bvand(..) => SpecOp::BVAnd,
+        Bvor(..) => SpecOp::BVOr,
         Bvxor(..) => SpecOp::BVXor,
         // Bvnand(Box<Exp<V>>, Box<Exp<V>>),
         // Bvnor(Box<Exp<V>>, Box<Exp<V>>),
@@ -706,12 +710,12 @@ fn exp_spec_op(exp: &smtlib::Exp<smt::Sym>) -> SpecOp {
         // Bvsge(Box<Exp<V>>, Box<Exp<V>>),
         // Bvugt(Box<Exp<V>>, Box<Exp<V>>),
         // Bvsgt(Box<Exp<V>>, Box<Exp<V>>),
-
-        // SignExtend(u32, Box<Exp<V>>),
+        ZeroExtend(..) => SpecOp::ZeroExt,
+        SignExtend(..) => SpecOp::SignExt,
         Bvshl(..) => SpecOp::BVShl,
-        // Bvlshr(Box<Exp<V>>, Box<Exp<V>>),
+        Bvlshr(..) => SpecOp::BVLshr,
         // Bvashr(Box<Exp<V>>, Box<Exp<V>>),
-        // Concat(Box<Exp<V>>, Box<Exp<V>>),
+        Concat(..) => SpecOp::Concat,
         // Ite(Box<Exp<V>>, Box<Exp<V>>, Box<Exp<V>>),
         // App(Sym, Vec<Exp<V>>),
         // Select(Box<Exp<V>>, Box<Exp<V>>),
@@ -734,6 +738,13 @@ where
 {
     SpecExpr::ConstInt {
         val: x.try_into().unwrap(),
+        pos: Pos::default(),
+    }
+}
+
+fn spec_const_bool(b: bool) -> SpecExpr {
+    SpecExpr::ConstBool {
+        val: if b { 1 } else { 0 },
         pos: Pos::default(),
     }
 }
