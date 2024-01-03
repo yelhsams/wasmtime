@@ -4,9 +4,9 @@ use cranelift_codegen::settings;
 use cranelift_codegen::AllocationConsumer;
 use cranelift_codegen::MachBuffer;
 use cranelift_codegen::MachInstEmit;
-use cranelift_isle::ast::Ident;
-use cranelift_isle::ast::{SpecExpr, SpecOp};
+use cranelift_isle::ast::{Ident, Spec, SpecExpr, SpecOp};
 use cranelift_isle::lexer::Pos;
+use cranelift_isle::printer;
 use crossbeam::queue::SegQueue;
 use isla::opts;
 use isla_lib::bitvector::{b64::B64, BV};
@@ -112,13 +112,13 @@ fn main() -> anyhow::Result<()> {
             rm: xreg(14),
             cond: Cond::Hs,
         },
-        Inst::CCmp {
-            size: OperandSize::Size64,
-            rn: xreg(22),
-            rm: xreg(1),
-            nzcv: NZCV::new(false, false, true, true),
-            cond: Cond::Eq,
-        },
+        // Inst::CCmp {
+        //     size: OperandSize::Size64,
+        //     rn: xreg(22),
+        //     rm: xreg(1),
+        //     nzcv: NZCV::new(false, false, true, true),
+        //     cond: Cond::Eq,
+        // },
         Inst::AluRRImmShift {
             alu_op: ALUOp::Lsr,
             size: OperandSize::Size64,
@@ -175,7 +175,7 @@ fn main() -> anyhow::Result<()> {
 
             // Generate spec.
             let spec = trace_to_spec(&events);
-            println!("spec = {spec:?}");
+            printer::dump(&spec)?;
 
             println!("");
         }
@@ -535,7 +535,16 @@ impl TypeContext {
     }
 }
 
-fn trace_to_spec<B: BV>(events: &Vec<Event<B>>) -> Vec<SpecExpr> {
+fn trace_to_spec<B: BV>(events: &Vec<Event<B>>) -> Spec {
+    Spec {
+        term: spec_ident("placeholder".to_string()),
+        args: vec![],
+        requires: vec![],
+        provides: trace_provides(events),
+    }
+}
+
+fn trace_provides<B: BV>(events: &Vec<Event<B>>) -> Vec<SpecExpr> {
     let mut tctx = TypeContext::new();
     events
         .iter()
@@ -586,7 +595,7 @@ fn exp_to_spec(exp: &smtlib::Exp<smt::Sym>, tctx: &TypeContext) -> SpecExpr {
     use smtlib::Exp::*;
     match exp {
         Var(v) => SpecExpr::Var {
-            var: Ident(format!("v{}", v), Pos::default()),
+            var: spec_ident(format!("v{}", v)),
             pos: Pos::default(),
         },
         Bits(bits) => spec_bits(bits),
@@ -797,4 +806,8 @@ fn spec_ternary(op: SpecOp, x: SpecExpr, y: SpecExpr, z: SpecExpr) -> SpecExpr {
         args: vec![x, y, z],
         pos: Pos::default(),
     }
+}
+
+fn spec_ident(id: String) -> Ident {
+    Ident(id, Pos::default())
 }
