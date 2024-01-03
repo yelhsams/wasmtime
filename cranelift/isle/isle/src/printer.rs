@@ -7,23 +7,33 @@ use crate::error::Errors;
 use pretty::{Doc, Pretty, RcAllocator, RcDoc};
 use std::io::Write;
 
-pub fn print<W>(defs: &Defs, width: usize, out: &mut W) -> Result<(), Errors>
+pub trait Printable {
+    fn to_doc(&self) -> RcDoc<()>;
+}
+
+pub fn print<N, W>(node: &N, width: usize, out: &mut W) -> Result<(), Errors>
 where
+    N: Printable,
     W: ?Sized + Write,
 {
-    defs.to_doc()
+    node.to_doc()
         .render(width, out)
         .map_err(|e| Errors::from_io(e, "failed to print isle"))
 }
 
-impl Defs {
+pub fn dump<N: Printable>(node: &N) -> Result<(), Errors> {
+    let mut stdout = std::io::stdout();
+    print(node, 78, &mut stdout)
+}
+
+impl Printable for Defs {
     fn to_doc(&self) -> RcDoc<()> {
         let sep = RcDoc::hardline().append(Doc::hardline());
         RcDoc::intersperse(self.defs.iter().map(|d| d.to_doc()), sep).append(Doc::hardline())
     }
 }
 
-impl Def {
+impl Printable for Def {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             Def::Pragma(_) => unimplemented!("pragmas not supported"),
@@ -79,29 +89,7 @@ impl Def {
                 parts.push(d.ret_ty.to_doc());
                 sexp(parts)
             }
-            Def::Spec(ref s) => {
-                let mut parts = vec![RcDoc::text("spec")];
-                parts.push(sexp(
-                    Vec::from([s.term.to_doc()])
-                        .into_iter()
-                        .chain(s.args.iter().map(|a| a.to_doc())),
-                ));
-                if !s.provides.is_empty() {
-                    parts.push(sexp(
-                        Vec::from([RcDoc::text("provide")])
-                            .into_iter()
-                            .chain(s.provides.iter().map(|e| e.to_doc())),
-                    ));
-                }
-                if !s.requires.is_empty() {
-                    parts.push(sexp(
-                        Vec::from([RcDoc::text("require")])
-                            .into_iter()
-                            .chain(s.requires.iter().map(|e| e.to_doc())),
-                    ));
-                }
-                sexp(parts)
-            }
+            Def::Spec(ref s) => s.to_doc(),
             Def::Model(ref m) => sexp(vec![RcDoc::text("model"), m.name.to_doc(), m.val.to_doc()]),
             Def::Form(ref f) => {
                 let mut parts = vec![RcDoc::text("form")];
@@ -129,13 +117,13 @@ impl Def {
     }
 }
 
-impl Ident {
+impl Printable for Ident {
     fn to_doc(&self) -> RcDoc<()> {
         RcDoc::text(self.0.clone())
     }
 }
 
-impl TypeValue {
+impl Printable for TypeValue {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             TypeValue::Primitive(ref name, _) => {
@@ -151,7 +139,7 @@ impl TypeValue {
     }
 }
 
-impl Variant {
+impl Printable for Variant {
     fn to_doc(&self) -> RcDoc<()> {
         sexp(
             // TODO(mbm): convenience for sexp with a fixed first element
@@ -162,13 +150,13 @@ impl Variant {
     }
 }
 
-impl Field {
+impl Printable for Field {
     fn to_doc(&self) -> RcDoc<()> {
         sexp(vec![self.name.to_doc(), self.ty.to_doc()])
     }
 }
 
-impl ModelValue {
+impl Printable for ModelValue {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             ModelValue::TypeValue(ref mt) => sexp(vec![RcDoc::text("type"), mt.to_doc()]),
@@ -183,7 +171,7 @@ impl ModelValue {
     }
 }
 
-impl ModelType {
+impl Printable for ModelType {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             ModelType::Int => RcDoc::text("Int"),
@@ -194,7 +182,7 @@ impl ModelType {
     }
 }
 
-impl Signature {
+impl Printable for Signature {
     fn to_doc(&self) -> RcDoc<()> {
         sexp(vec![
             sexp(
@@ -208,7 +196,7 @@ impl Signature {
     }
 }
 
-impl SpecExpr {
+impl Printable for SpecExpr {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             SpecExpr::ConstInt { val, .. } => RcDoc::as_string(val),
@@ -232,7 +220,7 @@ impl SpecExpr {
     }
 }
 
-impl SpecOp {
+impl Printable for SpecOp {
     fn to_doc(&self) -> RcDoc<()> {
         RcDoc::text(match self {
             SpecOp::Eq => "=",
@@ -288,7 +276,33 @@ impl SpecOp {
     }
 }
 
-impl Pattern {
+impl Printable for Spec {
+    fn to_doc(&self) -> RcDoc<()> {
+        let mut parts = vec![RcDoc::text("spec")];
+        parts.push(sexp(
+            Vec::from([self.term.to_doc()])
+                .into_iter()
+                .chain(self.args.iter().map(|a| a.to_doc())),
+        ));
+        if !self.provides.is_empty() {
+            parts.push(sexp(
+                Vec::from([RcDoc::text("provide")])
+                    .into_iter()
+                    .chain(self.provides.iter().map(|e| e.to_doc())),
+            ));
+        }
+        if !self.requires.is_empty() {
+            parts.push(sexp(
+                Vec::from([RcDoc::text("require")])
+                    .into_iter()
+                    .chain(self.requires.iter().map(|e| e.to_doc())),
+            ));
+        }
+        sexp(parts)
+    }
+}
+
+impl Printable for Pattern {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             Pattern::Var { var, .. } => var.to_doc(),
@@ -315,7 +329,7 @@ impl Pattern {
     }
 }
 
-impl IfLet {
+impl Printable for IfLet {
     fn to_doc(&self) -> RcDoc<()> {
         // TODO(mbm): `if` shorthand when pattern is wildcard
         sexp(vec![
@@ -326,7 +340,7 @@ impl IfLet {
     }
 }
 
-impl Expr {
+impl Printable for Expr {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             Expr::Term { sym, args, .. } => sexp(
@@ -349,13 +363,13 @@ impl Expr {
     }
 }
 
-impl LetDef {
+impl Printable for LetDef {
     fn to_doc(&self) -> RcDoc<()> {
         sexp(vec![self.var.to_doc(), self.ty.to_doc(), self.val.to_doc()])
     }
 }
 
-impl Extern {
+impl Printable for Extern {
     fn to_doc(&self) -> RcDoc<()> {
         match self {
             Extern::Extractor {
