@@ -29,6 +29,7 @@ fn main() -> anyhow::Result<()> {
     // Command-line options.
     let mut opts = opts::common_opts();
     opts.optflag("", "filter", "filter relevant events from the trace");
+    opts.optflag("", "spec", "convert traces to veri-isle specs");
 
     // Build ISLA architecture.
     let mut hasher = Sha256::new();
@@ -112,13 +113,13 @@ fn main() -> anyhow::Result<()> {
             rm: xreg(14),
             cond: Cond::Hs,
         },
-        // Inst::CCmp {
-        //     size: OperandSize::Size64,
-        //     rn: xreg(22),
-        //     rm: xreg(1),
-        //     nzcv: NZCV::new(false, false, true, true),
-        //     cond: Cond::Eq,
-        // },
+        Inst::CCmp {
+            size: OperandSize::Size64,
+            rn: xreg(22),
+            rm: xreg(1),
+            nzcv: NZCV::new(false, false, true, true),
+            cond: Cond::Eq,
+        },
         Inst::AluRRImmShift {
             alu_op: ALUOp::Lsr,
             size: OperandSize::Size64,
@@ -174,8 +175,12 @@ fn main() -> anyhow::Result<()> {
             write_events(&events, &iarch)?;
 
             // Generate spec.
-            let spec = trace_to_spec(&events);
-            printer::dump(&spec)?;
+            if matches.opt_present("spec") {
+                match trace_to_spec(&events) {
+                    Ok(spec) => printer::dump(&spec)?,
+                    Err(err) => println!("spec conversion failed: {}", err),
+                };
+            }
 
             println!("");
         }
@@ -535,59 +540,65 @@ impl TypeContext {
     }
 }
 
-fn trace_to_spec<B: BV>(events: &Vec<Event<B>>) -> Spec {
-    Spec {
+fn trace_to_spec<B: BV>(events: &Vec<Event<B>>) -> anyhow::Result<Spec> {
+    Ok(Spec {
         term: spec_ident("placeholder".to_string()),
         args: vec![],
         requires: vec![],
-        provides: trace_provides(events),
-    }
+        provides: trace_provides(events)?,
+    })
 }
 
-fn trace_provides<B: BV>(events: &Vec<Event<B>>) -> Vec<SpecExpr> {
+fn trace_provides<B: BV>(events: &Vec<Event<B>>) -> anyhow::Result<Vec<SpecExpr>> {
+    let mut provides = Vec::new();
     let mut tctx = TypeContext::new();
-    events
-        .iter()
-        .filter_map(|e| event_to_spec(e, &mut tctx))
-        .collect()
+    for event in events {
+        if let Some(exp) = event_to_spec(event, &mut tctx)? {
+            provides.push(exp);
+        }
+    }
+    Ok(provides)
 }
 
-fn event_to_spec<B: BV>(event: &Event<B>, tctx: &mut TypeContext) -> Option<SpecExpr> {
+fn event_to_spec<B: BV>(
+    event: &Event<B>,
+    tctx: &mut TypeContext,
+) -> anyhow::Result<Option<SpecExpr>> {
     match event {
         Event::Smt(def, attr, ..) if !attr.is_uninteresting() => smt_to_spec(def, tctx),
-        _ => None,
+        _ => Ok(None),
     }
 }
 
-fn smt_to_spec(def: &smtlib::Def, tctx: &mut TypeContext) -> Option<SpecExpr> {
+fn smt_to_spec(def: &smtlib::Def, tctx: &mut TypeContext) -> anyhow::Result<Option<SpecExpr>> {
     match def {
         smtlib::Def::DefineConst(v, exp) => {
             let ty = tctx.infer(exp).expect("SMT expression was badly-typed");
             tctx.ty.insert(*v, ty.clone());
 
-            Some(SpecExpr::Op {
+            Ok(Some(SpecExpr::Op {
                 op: SpecOp::Eq,
                 args: vec![
                     exp_to_spec(&smtlib::Exp::Var(*v), tctx),
                     exp_to_spec(exp, tctx),
                 ],
                 pos: Pos::default(),
-            })
+            }))
         }
 
         smtlib::Def::DeclareConst(v, ty) => {
             tctx.ty.insert(*v, ty.clone());
-            None
+            Ok(None)
         }
 
         smtlib::Def::DeclareFun(v, params, ret) => {
             tctx.fun.insert(*v, (params.clone(), ret.clone()));
-            None
+            Ok(None)
         }
 
-        smtlib::Def::DefineEnum(..) => None,
+        smtlib::Def::DefineEnum(..) => Ok(None),
 
-        _ => todo!("smt def: {:?}", def),
+        _ => anyhow::bail!("unsupported smt def: {:?}", def),
     }
 }
 
