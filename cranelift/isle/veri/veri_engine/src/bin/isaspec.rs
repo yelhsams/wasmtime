@@ -62,15 +62,32 @@ fn main() -> anyhow::Result<()> {
         rm: xreg(6),
     };
     let cfg = SpecConfig {
+        // Spec signature.
         term: "MInst.AluRRR".to_string(),
         args: ["alu_op", "size", "rd", "rn", "rm"]
             .map(String::from)
             .to_vec(),
+
+        // Requires.
+        require: vec![
+            spec_eq(
+                spec_var("alu_op".to_string()),
+                spec_enum("ALUOp".to_string(), "Add".to_string()),
+            ),
+            spec_eq(
+                spec_var("size".to_string()),
+                spec_enum("OperandSize".to_string(), "Size64".to_string()),
+            ),
+        ],
+
+        // Register read/write bindings.
         reg_read: HashMap::from([
             ("R5".to_string(), "rn".to_string()),
             ("R6".to_string(), "rm".to_string()),
         ]),
         reg_write: HashMap::from([("R4".to_string(), "rd".to_string())]),
+
+        // ISLA intermediate variable naming.
         var_prefix: "v".to_string(),
     };
 
@@ -86,6 +103,7 @@ fn main() -> anyhow::Result<()> {
     println!("inst = {inst:?}");
     println!("opcode = {opcode:08x}");
     println!("asm = {asm}");
+    println!("config = {cfg:?}");
     println!("");
 
     // ISLA trace.
@@ -473,10 +491,11 @@ fn write_events<'ir, B: BV>(
     Ok(())
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct SpecConfig {
     term: String,
     args: Vec<String>,
+    require: Vec<SpecExpr>,
     reg_read: HashMap<String, String>,
     reg_write: HashMap<String, String>,
     var_prefix: String,
@@ -506,7 +525,7 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
             spec: Spec {
                 term: spec_ident(cfg.term),
                 args: cfg.args.iter().cloned().map(spec_ident).collect(),
-                requires: vec![],
+                requires: cfg.require,
                 provides: vec![],
             },
             reg_reads: HashSet::new(),
@@ -574,11 +593,7 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
         self.reg_reads.insert(reg.clone());
 
         // Emit expression binding the ISLA variable to mapped ISLE term.
-        Ok(Some(SpecExpr::Op {
-            op: SpecOp::Eq,
-            args: vec![spec_var(mapped_var), self.sym(sym)],
-            pos: Pos::default(),
-        }))
+        Ok(Some(spec_eq(spec_var(mapped_var), self.sym(sym))))
     }
 
     fn write_reg(&mut self, name: &Name, sym: &Sym) -> anyhow::Result<Option<SpecExpr>> {
@@ -598,11 +613,7 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
         self.reg_writes.insert(reg.clone());
 
         // Emit expression binding the ISLA variable to mapped ISLE term.
-        Ok(Some(SpecExpr::Op {
-            op: SpecOp::Eq,
-            args: vec![spec_var(mapped_var), self.sym(sym)],
-            pos: Pos::default(),
-        }))
+        Ok(Some(spec_eq(spec_var(mapped_var), self.sym(sym))))
     }
 
     fn smt(&mut self, def: &smtlib::Def) -> anyhow::Result<Option<SpecExpr>> {
@@ -611,11 +622,7 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
                 let ty = self.infer(exp).expect("SMT expression was badly-typed");
                 self.ty.insert(*v, ty.clone());
 
-                Ok(Some(SpecExpr::Op {
-                    op: SpecOp::Eq,
-                    args: vec![self.sym(v), self.exp(exp)],
-                    pos: Pos::default(),
-                }))
+                Ok(Some(spec_eq(self.sym(v), self.exp(exp))))
             }
 
             smtlib::Def::DeclareConst(v, ty) => {
@@ -842,11 +849,21 @@ fn spec_binary(op: SpecOp, x: SpecExpr, y: SpecExpr) -> SpecExpr {
     }
 }
 
+fn spec_eq(x: SpecExpr, y: SpecExpr) -> SpecExpr {
+    spec_binary(SpecOp::Eq, x, y)
+}
+
 fn spec_ternary(op: SpecOp, x: SpecExpr, y: SpecExpr, z: SpecExpr) -> SpecExpr {
     SpecExpr::Op {
         op,
         args: vec![x, y, z],
         pos: Pos::default(),
+    }
+}
+
+fn spec_enum(name: String, variant: String) -> SpecExpr {
+    SpecExpr::Enum {
+        name: spec_ident(format!("{}.{}", name, variant)),
     }
 }
 
