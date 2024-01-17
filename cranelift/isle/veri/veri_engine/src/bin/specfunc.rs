@@ -62,23 +62,44 @@ fn trace_execute_function<'ir, B: BV>(
     let mut solver = Solver::from_checkpoint(&solver_ctx, initial_checkpoint);
     let checkpoint = smt::checkpoint(&mut solver);
 
-    // val execute_aarch64_instrs_integer_conditional_compare_register : forall 'datasize 'm 'n ('sub_op : Bool),
-    //   (0 <= 'n & 'n <= 31 & 0 <= 'm & 'm <= 31 & 'datasize in {32, 64}).
-    //   (bits(4), int('datasize), bits(4), int('m), int('n), bool('sub_op)) -> unit
-    // function execute_aarch64_instrs_integer_conditional_compare_register (condition, datasize, flags__arg, m, n, sub_op) = {
+    // // val execute_aarch64_instrs_integer_conditional_compare_register : forall 'datasize 'm 'n ('sub_op : Bool),
+    // //   (0 <= 'n & 'n <= 31 & 0 <= 'm & 'm <= 31 & 'datasize in {32, 64}).
+    // //   (bits(4), int('datasize), bits(4), int('m), int('n), bool('sub_op)) -> unit
+    // // function execute_aarch64_instrs_integer_conditional_compare_register (condition, datasize, flags__arg, m, n, sub_op) = {
+
+    // let execute_function =
+    //     zencode::encode("execute_aarch64_instrs_integer_conditional_compare_register");
+    // // condition: bits(4)
+    // let condition = Val::Bits(B::new(7, 4));
+    // // datasize: int('datasize)
+    // let datasize = Val::I64(64);
+    // // flags__arg
+    // let flags_arg = Val::Bits(B::new(3, 4));
+    // // m
+    // let rm = Val::I64(3);
+    // // n
+    // let rn = Val::I64(4);
+    // // sub_op
+    // let sub_op = Val::Bool(false);
+
+    // val execute_aarch64_instrs_integer_arithmetic_add_sub_carry : forall 'd 'datasize 'm 'n ('setflags : Bool) ('sub_op : Bool),
+    //   (0 <= 'n & 'n <= 31 & 0 <= 'm & 'm <= 31 & 'datasize in {32, 64} & 0 <= 'd & 'd <= 31).
+    //   (int('d), int('datasize), int('m), int('n), bool('setflags), bool('sub_op)) -> unit
+    //
+    // function execute_aarch64_instrs_integer_arithmetic_add_sub_carry (d, datasize, m, n, setflags, sub_op) = {
 
     let execute_function =
-        zencode::encode("execute_aarch64_instrs_integer_conditional_compare_register");
-    // condition: bits(4)
-    let condition = Val::Bits(B::new(7, 4));
-    // datasize: int('datasize)
+        zencode::encode("execute_aarch64_instrs_integer_arithmetic_add_sub_carry");
+    // d
+    let rd = Val::I64(2);
+    // datasize
     let datasize = Val::I64(64);
-    // flags__arg
-    let flags_arg = Val::Bits(B::new(3, 4));
     // m
     let rm = Val::I64(3);
     // n
     let rn = Val::I64(4);
+    // setflags
+    let setflags = Val::Bool(true);
     // sub_op
     let sub_op = Val::Bool(false);
 
@@ -90,7 +111,7 @@ fn trace_execute_function<'ir, B: BV>(
         function_id,
         args,
         ret_ty,
-        Some(&[condition, datasize, flags_arg, rm, rn, sub_op]),
+        Some(&[rd, datasize, rm, rn, setflags, sub_op]),
         instrs,
     )
     .add_lets(&iarch.lets)
@@ -113,7 +134,7 @@ fn trace_execute_function<'ir, B: BV>(
     loop {
         match queue.pop() {
             Some(Ok((_, mut events))) => {
-                simplify::hide_initialization(&mut events);
+                //simplify::hide_initialization(&mut events);
                 simplify::remove_extra_register_fields(&mut events);
                 simplify::remove_repeated_register_reads(&mut events);
                 simplify::remove_unused_register_assumptions(&mut events);
