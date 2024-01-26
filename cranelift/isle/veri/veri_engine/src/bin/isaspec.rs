@@ -19,7 +19,6 @@ use isla_lib::simplify::{self, WriteOpts};
 use isla_lib::smt::smtlib;
 use isla_lib::smt::{self, Checkpoint, Event, Solver, Sym};
 use isla_lib::zencode;
-use itertools::Itertools;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::prelude::*;
@@ -57,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     let cfg = define();
 
     // Generate spec.
-    let mut spec_converter = SpecConverter::new(cfg, &iarch);
+    let spec_converter = SpecConverter::new(cfg, &iarch);
     let spec = spec_converter.generate()?;
     printer::dump(&spec)?;
 
@@ -81,6 +80,34 @@ fn main() -> anyhow::Result<()> {
 
 /// Define specificiations to generate.
 fn define() -> SpecConfig {
+    // ALUOp
+    let alu_ops = vec![
+        ALUOp::Add,
+        ALUOp::Sub,
+        ALUOp::Orr,
+        ALUOp::OrrNot,
+        ALUOp::And,
+        // ALUOp::AndS, // 2 code paths
+        ALUOp::AndNot,
+        ALUOp::Eor,
+        ALUOp::EorNot,
+        //ALUOp::AddS,
+        //ALUOp::SubS,
+        //ALUOp::SMulH,
+        //ALUOp::UMulH,
+        //ALUOp::SDiv,
+        //ALUOp::UDiv,
+        //ALUOp::RotR,
+        ALUOp::Lsr,
+        ALUOp::Asr,
+        ALUOp::Lsl,
+        //ALUOp::Adc,
+        //ALUOp::AdcS,
+        //ALUOp::Sbc,
+        //ALUOp::SbcS,
+    ];
+
+    // AluRRR
     SpecConfig {
         // Spec signature.
         term: "MInst.AluRRR".to_string(),
@@ -88,34 +115,38 @@ fn define() -> SpecConfig {
             .map(String::from)
             .to_vec(),
 
-        cases: vec![InstConfig {
-            inst: Inst::AluRRR {
-                alu_op: ALUOp::Add,
-                size: OperandSize::Size64,
-                rd: writable_xreg(4),
-                rn: xreg(5),
-                rm: xreg(6),
-            },
+        cases: alu_ops
+            .iter()
+            .copied()
+            .map(|alu_op| InstConfig {
+                inst: Inst::AluRRR {
+                    alu_op,
+                    size: OperandSize::Size64,
+                    rd: writable_xreg(4),
+                    rn: xreg(5),
+                    rm: xreg(6),
+                },
 
-            // Requires.
-            require: vec![
-                spec_eq(
-                    spec_var("alu_op".to_string()),
-                    spec_enum("ALUOp".to_string(), "Add".to_string()),
-                ),
-                spec_eq(
-                    spec_var("size".to_string()),
-                    spec_enum("OperandSize".to_string(), "Size64".to_string()),
-                ),
-            ],
+                // Requires.
+                require: vec![
+                    spec_eq(
+                        spec_var("alu_op".to_string()),
+                        spec_enum("ALUOp".to_string(), format!("{alu_op:?}")),
+                    ),
+                    spec_eq(
+                        spec_var("size".to_string()),
+                        spec_enum("OperandSize".to_string(), "Size64".to_string()),
+                    ),
+                ],
 
-            // Register read/write bindings.
-            reg_read: HashMap::from([
-                ("R5".to_string(), "rn".to_string()),
-                ("R6".to_string(), "rm".to_string()),
-            ]),
-            reg_write: HashMap::from([("R4".to_string(), "rd".to_string())]),
-        }],
+                // Register read/write bindings.
+                reg_read: HashMap::from([
+                    ("R5".to_string(), "rn".to_string()),
+                    ("R6".to_string(), "rm".to_string()),
+                ]),
+                reg_write: HashMap::from([("R4".to_string(), "rd".to_string())]),
+            })
+            .collect(),
     }
 }
 
@@ -567,25 +598,8 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
     }
 
     fn case(&self, case: &InstConfig) -> anyhow::Result<Conditions> {
-        // Assemble instruction.
-        let opcodes = opcodes(&case.inst);
-        assert_eq!(opcodes.len(), 1);
-        let opcode = opcodes[0];
-
-        // ISLA trace.
-        let paths = trace_opcode(opcode, &self.iarch)?;
-
-        // TODO(mbm): handle multiple paths
-        assert_eq!(paths.len(), 1);
-        let events = &paths[0];
-
-        // Filter.
-        let events = tree_shake(events);
-
-        // Convert.
         let mut converter = TraceConverter::new(case.clone(), &self.iarch);
         let conds = converter.convert()?;
-
         Ok(conds)
     }
 }
@@ -774,21 +788,23 @@ impl<'ir, B: BV> TraceConverter<'ir, B> {
             | Bvmul(lhs, rhs)
             | Bvshl(lhs, rhs)
             | Bvlshr(lhs, rhs)
-            | Concat(lhs, rhs) => spec_binary(exp_spec_op(exp), self.exp(lhs), self.exp(rhs)),
-
             // Bvudiv(Box<Exp<V>>, Box<Exp<V>>),
             // Bvsdiv(Box<Exp<V>>, Box<Exp<V>>),
             // Bvurem(Box<Exp<V>>, Box<Exp<V>>),
-            // Bvsrem(Box<Exp<V>>, Box<Exp<V>>),
+            | Bvsrem(lhs, rhs)
             // Bvsmod(Box<Exp<V>>, Box<Exp<V>>),
             // Bvult(Box<Exp<V>>, Box<Exp<V>>),
-            // Bvslt(Box<Exp<V>>, Box<Exp<V>>),
+            | Bvslt(lhs, rhs)
             // Bvule(Box<Exp<V>>, Box<Exp<V>>),
             // Bvsle(Box<Exp<V>>, Box<Exp<V>>),
             // Bvuge(Box<Exp<V>>, Box<Exp<V>>),
             // Bvsge(Box<Exp<V>>, Box<Exp<V>>),
             // Bvugt(Box<Exp<V>>, Box<Exp<V>>),
             // Bvsgt(Box<Exp<V>>, Box<Exp<V>>),
+            // Bvlshr(Box<Exp<V>>, Box<Exp<V>>),
+            | Bvashr(lhs, rhs)
+            | Concat(lhs, rhs) => spec_binary(exp_spec_op(exp), self.exp(lhs), self.exp(rhs)),
+
             Extract(i, j, exp) => spec_ternary(
                 SpecOp::Extract,
                 spec_const_int(*i),
@@ -803,8 +819,6 @@ impl<'ir, B: BV> TraceConverter<'ir, B> {
                 _ => panic!("extension applies to bitvector types"),
             },
 
-            // Bvlshr(Box<Exp<V>>, Box<Exp<V>>),
-            // Bvashr(Box<Exp<V>>, Box<Exp<V>>),
             Ite(c, t, e) => spec_ternary(SpecOp::If, self.exp(c), self.exp(t), self.exp(e)),
 
             // App(Sym, Vec<Exp<V>>),
@@ -861,10 +875,10 @@ fn exp_spec_op(exp: &smtlib::Exp<Sym>) -> SpecOp {
         // Bvudiv(Box<Exp<V>>, Box<Exp<V>>),
         // Bvsdiv(Box<Exp<V>>, Box<Exp<V>>),
         // Bvurem(Box<Exp<V>>, Box<Exp<V>>),
-        // Bvsrem(Box<Exp<V>>, Box<Exp<V>>),
+        Bvsrem(..) => SpecOp::BVSrem,
         // Bvsmod(Box<Exp<V>>, Box<Exp<V>>),
         // Bvult(Box<Exp<V>>, Box<Exp<V>>),
-        // Bvslt(Box<Exp<V>>, Box<Exp<V>>),
+        Bvslt(..) => SpecOp::BVSlt,
         // Bvule(Box<Exp<V>>, Box<Exp<V>>),
         // Bvsle(Box<Exp<V>>, Box<Exp<V>>),
         // Bvuge(Box<Exp<V>>, Box<Exp<V>>),
@@ -875,7 +889,7 @@ fn exp_spec_op(exp: &smtlib::Exp<Sym>) -> SpecOp {
         SignExtend(..) => SpecOp::SignExt,
         Bvshl(..) => SpecOp::BVShl,
         Bvlshr(..) => SpecOp::BVLshr,
-        // Bvashr(Box<Exp<V>>, Box<Exp<V>>),
+        Bvashr(..) => SpecOp::BVAshr,
         Concat(..) => SpecOp::Concat,
         // Ite(Box<Exp<V>>, Box<Exp<V>>, Box<Exp<V>>),
         // App(Sym, Vec<Exp<V>>),
