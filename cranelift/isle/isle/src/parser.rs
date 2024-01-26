@@ -475,6 +475,7 @@ impl<'a> Parser<'a> {
             "and" => Ok(SpecOp::And),
             "not" => Ok(SpecOp::Not),
             "or" => Ok(SpecOp::Or),
+            "=>" => Ok(SpecOp::Imp),
             "<=" => Ok(SpecOp::Lte),
             "<" => Ok(SpecOp::Lt),
             ">=" => Ok(SpecOp::Gte),
