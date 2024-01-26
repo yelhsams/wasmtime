@@ -60,21 +60,6 @@ fn main() -> anyhow::Result<()> {
     let spec = spec_converter.generate()?;
     printer::dump(&spec)?;
 
-    // // Assemble.
-    // let opcodes = opcodes(&inst);
-    // assert_eq!(opcodes.len(), 1);
-    // let opcode = opcodes[0];
-
-    // // Show assembly.
-    // let asm = inst.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
-
-    // println!("--------------------------------------------------");
-    // println!("inst = {inst:?}");
-    // println!("opcode = {opcode:08x}");
-    // println!("asm = {asm}");
-    // println!("config = {cfg:?}");
-    // println!("");
-
     Ok(())
 }
 
@@ -149,35 +134,6 @@ fn define() -> SpecConfig {
             .collect(),
     }
 }
-
-// struct SpecBuilder<'ir, B: BV> {
-//     term: String,
-//     params: Vec<String>,
-//     inst: Inst,
-//     iarch: &'ir Initialized<'ir, B>,
-// }
-//
-// impl<'ir, B: BV> SpecBuilder<'ir, B> {
-//     fn build(&self) -> anyhow::Result<Spec> {
-//         // Assemble instruction.
-//         let opcodes = opcodes(&self.inst);
-//         assert_eq!(opcodes.len(), 1);
-//         let opcode = opcodes[0];
-//
-//         // ISLA trace.
-//         let paths = trace_opcode(opcode, &self.iarch)?;
-//
-//         // TODO(mbm): handle multiple paths
-//         assert_eq!(paths.len(), 1);
-//         let events = &paths[0];
-//
-//         // Filter.
-//         let events = tree_shake(events);
-//
-//         // Generate spec.
-//         trace_to_spec(&events)
-//     }
-// }
 
 fn assemble(inst: &Inst) -> Vec<u8> {
     let flags = settings::Flags::new(settings::builder());
@@ -631,10 +587,21 @@ impl<'ir, B: BV> TraceConverter<'ir, B> {
     }
 
     fn convert(&mut self) -> anyhow::Result<Conditions> {
+        let inst = &self.cfg.inst;
+
         // Assemble instruction.
-        let opcodes = opcodes(&self.cfg.inst);
+        let opcodes = opcodes(inst);
         assert_eq!(opcodes.len(), 1);
         let opcode = opcodes[0];
+
+        // Debugging.
+        let asm =
+            inst.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
+
+        println!("inst = {inst:#?}");
+        println!("opcode = {opcode:08x}");
+        println!("asm = {asm}");
+        println!("----");
 
         // ISLA trace.
         let paths = trace_opcode(opcode, &self.iarch)?;
@@ -642,6 +609,10 @@ impl<'ir, B: BV> TraceConverter<'ir, B> {
         // TODO(mbm): handle multiple paths
         assert_eq!(paths.len(), 1);
         let events = &paths[0];
+
+        // Debugging.
+        write_events(events, self.iarch)?;
+        println!("--------------------------------------------------");
 
         // Filter.
         let events = tree_shake(events);
