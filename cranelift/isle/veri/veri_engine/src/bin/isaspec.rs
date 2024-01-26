@@ -29,7 +29,8 @@ use std::sync::Arc;
 fn main() -> anyhow::Result<()> {
     // Command-line options.
     let mut opts = opts::common_opts();
-    opts.optflag("", "filter", "filter relevant events from the trace");
+    opts.optopt("", "spec", "path to output spec", "<path>");
+    opts.optopt("", "width", "line length for output spec", "<chars>");
 
     // Build ISLA architecture.
     let mut hasher = Sha256::new();
@@ -58,7 +59,16 @@ fn main() -> anyhow::Result<()> {
     // Generate spec.
     let spec_converter = SpecConverter::new(cfg, &iarch);
     let spec = spec_converter.generate()?;
-    printer::dump(&spec)?;
+
+    // Output.
+    let width = matches.opt_get_default("width", 78)?;
+    if let Some(path) = matches.opt_str("spec") {
+        let mut file = std::fs::File::create(path)?;
+        printer::print(&spec, width, &mut file)?;
+    } else {
+        let mut stdout = std::io::stdout();
+        printer::print(&spec, width, &mut stdout)?;
+    };
 
     Ok(())
 }
