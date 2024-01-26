@@ -142,6 +142,7 @@ pub enum SpecOp {
     And,
     Or,
     Not,
+    Imp,
 
     // Integer comparisons
     Lt,

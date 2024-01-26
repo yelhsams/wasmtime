@@ -19,6 +19,7 @@ use isla_lib::simplify::{self, WriteOpts};
 use isla_lib::smt::smtlib;
 use isla_lib::smt::{self, Checkpoint, Event, Solver, Sym};
 use isla_lib::zencode;
+use itertools::Itertools;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::prelude::*;
@@ -30,7 +31,6 @@ fn main() -> anyhow::Result<()> {
     // Command-line options.
     let mut opts = opts::common_opts();
     opts.optflag("", "filter", "filter relevant events from the trace");
-    //opts.optflag("", "spec", "convert traces to veri-isle specs");
 
     // Build ISLA architecture.
     let mut hasher = Sha256::new();
@@ -53,80 +53,70 @@ fn main() -> anyhow::Result<()> {
         use_model_reg_init,
     );
 
-    // Assemble and trace instructions.
-    let inst = Inst::AluRRR {
-        alu_op: ALUOp::Add,
-        size: OperandSize::Size64,
-        rd: writable_xreg(4),
-        rn: xreg(5),
-        rm: xreg(6),
-    };
-    let cfg = SpecConfig {
+    // Spec configuration.
+    let cfg = define();
+
+    // Generate spec.
+    let mut spec_converter = SpecConverter::new(cfg, &iarch);
+    let spec = spec_converter.generate()?;
+    printer::dump(&spec)?;
+
+    // // Assemble.
+    // let opcodes = opcodes(&inst);
+    // assert_eq!(opcodes.len(), 1);
+    // let opcode = opcodes[0];
+
+    // // Show assembly.
+    // let asm = inst.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
+
+    // println!("--------------------------------------------------");
+    // println!("inst = {inst:?}");
+    // println!("opcode = {opcode:08x}");
+    // println!("asm = {asm}");
+    // println!("config = {cfg:?}");
+    // println!("");
+
+    Ok(())
+}
+
+/// Define specificiations to generate.
+fn define() -> SpecConfig {
+    SpecConfig {
         // Spec signature.
         term: "MInst.AluRRR".to_string(),
         args: ["alu_op", "size", "rd", "rn", "rm"]
             .map(String::from)
             .to_vec(),
 
-        // Requires.
-        require: vec![
-            spec_eq(
-                spec_var("alu_op".to_string()),
-                spec_enum("ALUOp".to_string(), "Add".to_string()),
-            ),
-            spec_eq(
-                spec_var("size".to_string()),
-                spec_enum("OperandSize".to_string(), "Size64".to_string()),
-            ),
-        ],
+        cases: vec![InstConfig {
+            inst: Inst::AluRRR {
+                alu_op: ALUOp::Add,
+                size: OperandSize::Size64,
+                rd: writable_xreg(4),
+                rn: xreg(5),
+                rm: xreg(6),
+            },
 
-        // Register read/write bindings.
-        reg_read: HashMap::from([
-            ("R5".to_string(), "rn".to_string()),
-            ("R6".to_string(), "rm".to_string()),
-        ]),
-        reg_write: HashMap::from([("R4".to_string(), "rd".to_string())]),
+            // Requires.
+            require: vec![
+                spec_eq(
+                    spec_var("alu_op".to_string()),
+                    spec_enum("ALUOp".to_string(), "Add".to_string()),
+                ),
+                spec_eq(
+                    spec_var("size".to_string()),
+                    spec_enum("OperandSize".to_string(), "Size64".to_string()),
+                ),
+            ],
 
-        // ISLA intermediate variable naming.
-        var_prefix: "v".to_string(),
-    };
-
-    // Assemble.
-    let opcodes = opcodes(&inst);
-    assert_eq!(opcodes.len(), 1);
-    let opcode = opcodes[0];
-
-    // Show assembly.
-    let asm = inst.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
-
-    println!("--------------------------------------------------");
-    println!("inst = {inst:?}");
-    println!("opcode = {opcode:08x}");
-    println!("asm = {asm}");
-    println!("config = {cfg:?}");
-    println!("");
-
-    // ISLA trace.
-    let paths = trace_opcode(opcode, &iarch)?;
-    assert_eq!(paths.len(), 1);
-    let events = &paths[0];
-
-    // Dump.
-    let events = if matches.opt_present("filter") {
-        tree_shake(&events)
-    } else {
-        events.clone()
-    };
-    write_events(&events, &iarch)?;
-
-    // Generate spec.
-    let mut spec_converter = SpecConverter::new(cfg, &iarch);
-    match spec_converter.convert(&events) {
-        Ok(spec) => printer::dump(&spec)?,
-        Err(err) => println!("spec conversion failed: {}", err),
-    };
-
-    Ok(())
+            // Register read/write bindings.
+            reg_read: HashMap::from([
+                ("R5".to_string(), "rn".to_string()),
+                ("R6".to_string(), "rm".to_string()),
+            ]),
+            reg_write: HashMap::from([("R4".to_string(), "rd".to_string())]),
+        }],
+    }
 }
 
 // struct SpecBuilder<'ir, B: BV> {
@@ -191,7 +181,7 @@ fn trace_opcode<'ir, B: BV>(
 
     let opcode_val = Val::Bits(B::from_u32(opcode));
 
-    let footprint_function = "zisla_footprint_no_init";
+    let footprint_function = zencode::encode("isla_footprint_no_init");
     let function_id = shared_state.symtab.lookup(&footprint_function);
     let (args, ret_ty, instrs) = shared_state.functions.get(&function_id).unwrap();
     let memory = Memory::new();
@@ -491,22 +481,118 @@ fn write_events<'ir, B: BV>(
     Ok(())
 }
 
+#[derive(Clone)]
+struct Conditions {
+    requires: Vec<SpecExpr>,
+    provides: Vec<SpecExpr>,
+}
+
+impl Conditions {
+    fn new() -> Self {
+        Self {
+            requires: Vec::new(),
+            provides: Vec::new(),
+        }
+    }
+
+    fn merge(cs: Vec<Self>) -> Self {
+        match cs.len() {
+            0 => Self::new(),
+            1 => cs[0].clone(),
+            _ => Self {
+                requires: vec![spec_or(
+                    cs.iter().map(|c| spec_and(c.requires.clone())).collect(),
+                )],
+                provides: cs
+                    .iter()
+                    .map(|c| {
+                        spec_binary(
+                            SpecOp::Imp,
+                            spec_and(c.requires.clone()),
+                            spec_and(c.provides.clone()),
+                        )
+                    })
+                    .collect(),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct SpecConfig {
     term: String,
     args: Vec<String>,
+    cases: Vec<InstConfig>,
+}
+
+#[derive(Debug, Clone)]
+struct InstConfig {
+    inst: Inst,
     require: Vec<SpecExpr>,
     reg_read: HashMap<String, String>,
     reg_write: HashMap<String, String>,
-    var_prefix: String,
 }
 
 struct SpecConverter<'ir, B: BV> {
     cfg: SpecConfig,
     iarch: &'ir Initialized<'ir, B>,
+}
 
-    // Specification object under construction.
-    spec: Spec,
+impl<'ir, B: BV> SpecConverter<'ir, B> {
+    fn new(cfg: SpecConfig, iarch: &'ir Initialized<'ir, B>) -> Self {
+        Self {
+            cfg: cfg.clone(),
+            iarch,
+        }
+    }
+
+    fn generate(&self) -> anyhow::Result<Spec> {
+        // Derive conditions for each case.
+        let conds: Vec<Conditions> = self
+            .cfg
+            .cases
+            .iter()
+            .map(|c| self.case(c))
+            .collect::<Result<_, _>>()?;
+        let cond = Conditions::merge(conds);
+
+        let spec = Spec {
+            term: spec_ident(self.cfg.term.clone()),
+            args: self.cfg.args.iter().cloned().map(spec_ident).collect(),
+            requires: cond.requires,
+            provides: cond.provides,
+        };
+
+        Ok(spec)
+    }
+
+    fn case(&self, case: &InstConfig) -> anyhow::Result<Conditions> {
+        // Assemble instruction.
+        let opcodes = opcodes(&case.inst);
+        assert_eq!(opcodes.len(), 1);
+        let opcode = opcodes[0];
+
+        // ISLA trace.
+        let paths = trace_opcode(opcode, &self.iarch)?;
+
+        // TODO(mbm): handle multiple paths
+        assert_eq!(paths.len(), 1);
+        let events = &paths[0];
+
+        // Filter.
+        let events = tree_shake(events);
+
+        // Convert.
+        let mut converter = TraceConverter::new(case.clone(), &self.iarch);
+        let conds = converter.convert()?;
+
+        Ok(conds)
+    }
+}
+
+struct TraceConverter<'ir, B: BV> {
+    cfg: InstConfig,
+    iarch: &'ir Initialized<'ir, B>,
 
     // Keep track of registers read and written in the trace.
     reg_reads: HashSet<String>,
@@ -517,17 +603,12 @@ struct SpecConverter<'ir, B: BV> {
     funty: HashMap<Sym, (Vec<smtlib::Ty>, smtlib::Ty)>,
 }
 
-impl<'ir, B: BV> SpecConverter<'ir, B> {
-    fn new(cfg: SpecConfig, iarch: &'ir Initialized<'ir, B>) -> Self {
+impl<'ir, B: BV> TraceConverter<'ir, B> {
+    fn new(cfg: InstConfig, iarch: &'ir Initialized<'ir, B>) -> Self {
         Self {
             cfg: cfg.clone(),
             iarch,
-            spec: Spec {
-                term: spec_ident(cfg.term),
-                args: cfg.args.iter().cloned().map(spec_ident).collect(),
-                requires: cfg.require,
-                provides: vec![],
-            },
+
             reg_reads: HashSet::new(),
             reg_writes: HashSet::new(),
             ty: HashMap::new(),
@@ -535,13 +616,35 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
         }
     }
 
-    fn convert(&mut self, events: &Vec<Event<B>>) -> anyhow::Result<Spec> {
+    fn convert(&mut self) -> anyhow::Result<Conditions> {
+        // Assemble instruction.
+        let opcodes = opcodes(&self.cfg.inst);
+        assert_eq!(opcodes.len(), 1);
+        let opcode = opcodes[0];
+
+        // ISLA trace.
+        let paths = trace_opcode(opcode, &self.iarch)?;
+
+        // TODO(mbm): handle multiple paths
+        assert_eq!(paths.len(), 1);
+        let events = &paths[0];
+
+        // Filter.
+        let events = tree_shake(events);
+
+        // Convert into conditions.
+        let mut conds = Conditions {
+            provides: Vec::new(),
+            requires: self.cfg.require.clone(),
+        };
+
         for event in events {
-            if let Some(exp) = self.event(event)? {
-                self.spec.provides.push(exp);
+            if let Some(exp) = self.event(&event)? {
+                conds.provides.push(exp);
             }
         }
-        Ok(self.spec.clone())
+
+        Ok(conds)
     }
 
     fn event(&mut self, event: &Event<B>) -> anyhow::Result<Option<SpecExpr>> {
@@ -720,7 +823,7 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
     }
 
     fn sym(&self, s: &Sym) -> SpecExpr {
-        spec_var(format!("{}{}", self.cfg.var_prefix, s))
+        spec_var(format!("v{}", s))
     }
 
     fn infer(&self, exp: &smtlib::Exp<Sym>) -> Option<smtlib::Ty> {
@@ -833,20 +936,20 @@ fn spec_bits(bits: &[bool]) -> SpecExpr {
         .unwrap()
 }
 
+fn spec_and(args: Vec<SpecExpr>) -> SpecExpr {
+    spec_op(SpecOp::And, args)
+}
+
+fn spec_or(args: Vec<SpecExpr>) -> SpecExpr {
+    spec_op(SpecOp::Or, args)
+}
+
 fn spec_unary(op: SpecOp, x: SpecExpr) -> SpecExpr {
-    SpecExpr::Op {
-        op,
-        args: vec![x],
-        pos: Pos::default(),
-    }
+    spec_op(op, vec![x])
 }
 
 fn spec_binary(op: SpecOp, x: SpecExpr, y: SpecExpr) -> SpecExpr {
-    SpecExpr::Op {
-        op,
-        args: vec![x, y],
-        pos: Pos::default(),
-    }
+    spec_op(op, vec![x, y])
 }
 
 fn spec_eq(x: SpecExpr, y: SpecExpr) -> SpecExpr {
@@ -854,9 +957,13 @@ fn spec_eq(x: SpecExpr, y: SpecExpr) -> SpecExpr {
 }
 
 fn spec_ternary(op: SpecOp, x: SpecExpr, y: SpecExpr, z: SpecExpr) -> SpecExpr {
+    spec_op(op, vec![x, y, z])
+}
+
+fn spec_op(op: SpecOp, args: Vec<SpecExpr>) -> SpecExpr {
     SpecExpr::Op {
         op,
-        args: vec![x, y, z],
+        args: args,
         pos: Pos::default(),
     }
 }

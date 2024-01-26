@@ -227,6 +227,7 @@ impl Printable for SpecOp {
             SpecOp::And => "and",
             SpecOp::Not => "not",
             SpecOp::Or => "or",
+            SpecOp::Imp => "=>",
             SpecOp::Lte => "<=",
             SpecOp::Lt => "<",
             SpecOp::Gte => ">=",
