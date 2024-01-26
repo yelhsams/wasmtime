@@ -776,6 +776,7 @@ impl<'ir, B: BV> TraceConverter<'ir, B> {
             | Bvashr(lhs, rhs)
             | Concat(lhs, rhs) => spec_binary(exp_spec_op(exp), self.exp(lhs), self.exp(rhs)),
 
+            // TODO: elide no-op extract ops for example (extract 63 0 x) for a 64-bit x
             Extract(i, j, exp) => spec_ternary(
                 SpecOp::Extract,
                 spec_const_int(*i),
@@ -783,12 +784,13 @@ impl<'ir, B: BV> TraceConverter<'ir, B> {
                 self.exp(exp),
             ),
 
+            ZeroExtend(0, x) | SignExtend(0, x) => self.exp(x),
             ZeroExtend(n, x) | SignExtend(n, x) => match self.infer(x).unwrap() {
                 smtlib::Ty::BitVec(w) => {
                     spec_binary(exp_spec_op(exp), spec_const_int(n + w), self.exp(x))
                 }
                 _ => panic!("extension applies to bitvector types"),
-            },
+            }
 
             Ite(c, t, e) => spec_ternary(SpecOp::If, self.exp(c), self.exp(t), self.exp(e)),
 
