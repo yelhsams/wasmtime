@@ -3200,6 +3200,17 @@ fn test_broken_imm_udiv_cve_underlying_32() {
     })
 }
 
+#[test]
+fn test_named_alu_rrr_emit() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "alu_rrr_emit",
+            "alu_rrr",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    })
+}
+
 // x64
 
 #[test]

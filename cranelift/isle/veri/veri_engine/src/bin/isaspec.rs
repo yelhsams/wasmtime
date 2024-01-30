@@ -3,7 +3,7 @@ use cranelift_codegen::settings;
 use cranelift_codegen::AllocationConsumer;
 use cranelift_codegen::MachBuffer;
 use cranelift_codegen::MachInstEmit;
-use cranelift_isle::ast::{Ident, Spec, SpecExpr, SpecOp};
+use cranelift_isle::ast::{Def, Defs, Ident, Spec, SpecExpr, SpecOp};
 use cranelift_isle::lexer::Pos;
 use cranelift_isle::printer;
 use crossbeam::queue::SegQueue;
@@ -54,10 +54,10 @@ fn main() -> anyhow::Result<()> {
     );
 
     // Spec configuration.
-    let cfg = define();
+    let cfgs = define();
 
-    // Generate spec.
-    let spec_converter = SpecConverter::new(cfg, &iarch);
+    // Generate specs.
+    let spec_converter = SpecConverter::new(cfgs, &iarch);
     let spec = spec_converter.generate()?;
 
     // Output.
@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// Define specificiations to generate.
-fn define() -> SpecConfig {
+fn define() -> Vec<SpecConfig> {
     // ALUOp
     let alu_ops = vec![
         ALUOp::Add,
@@ -82,10 +82,13 @@ fn define() -> SpecConfig {
         ALUOp::Orr,
         ALUOp::OrrNot,
         ALUOp::And,
-        // ALUOp::AndS, // 2 code paths
         ALUOp::AndNot,
         ALUOp::Eor,
         ALUOp::EorNot,
+        //ALUOp::Lsr,
+        //ALUOp::Asr,
+        //ALUOp::Lsl,
+        //ALUOp::AndS, // 2 code paths
         //ALUOp::AddS,
         //ALUOp::SubS,
         //ALUOp::SMulH,
@@ -93,9 +96,6 @@ fn define() -> SpecConfig {
         //ALUOp::SDiv,
         //ALUOp::UDiv,
         //ALUOp::RotR,
-        ALUOp::Lsr,
-        ALUOp::Asr,
-        ALUOp::Lsl,
         //ALUOp::Adc,
         //ALUOp::AdcS,
         //ALUOp::Sbc,
@@ -103,7 +103,7 @@ fn define() -> SpecConfig {
     ];
 
     // AluRRR
-    SpecConfig {
+    let alu_rrr = SpecConfig {
         // Spec signature.
         term: "MInst.AluRRR".to_string(),
         args: ["alu_op", "size", "rd", "rn", "rm"]
@@ -142,7 +142,9 @@ fn define() -> SpecConfig {
                 reg_write: HashMap::from([("R4".to_string(), "rd".to_string())]),
             })
             .collect(),
-    }
+    };
+
+    vec![alu_rrr]
 }
 
 fn assemble(inst: &Inst) -> Vec<u8> {
@@ -531,22 +533,35 @@ struct InstConfig {
 }
 
 struct SpecConverter<'ir, B: BV> {
-    cfg: SpecConfig,
+    cfgs: Vec<SpecConfig>,
     iarch: &'ir Initialized<'ir, B>,
 }
 
 impl<'ir, B: BV> SpecConverter<'ir, B> {
-    fn new(cfg: SpecConfig, iarch: &'ir Initialized<'ir, B>) -> Self {
+    fn new(cfgs: Vec<SpecConfig>, iarch: &'ir Initialized<'ir, B>) -> Self {
         Self {
-            cfg: cfg.clone(),
+            cfgs: cfgs.clone(),
             iarch,
         }
     }
 
-    fn generate(&self) -> anyhow::Result<Spec> {
+    fn generate(&self) -> anyhow::Result<Defs> {
+        let defs: Vec<Def> = self
+            .cfgs
+            .iter()
+            .map(|cfg| Ok(Def::Spec(self.spec(cfg)?)))
+            .collect::<anyhow::Result<_>>()?;
+
+        Ok(Defs {
+            defs,
+            filenames: vec![],
+            file_texts: vec![],
+        })
+    }
+
+    fn spec(&self, cfg: &SpecConfig) -> anyhow::Result<Spec> {
         // Derive conditions for each case.
-        let conds: Vec<Conditions> = self
-            .cfg
+        let conds: Vec<Conditions> = cfg
             .cases
             .iter()
             .map(|c| self.case(c))
@@ -554,8 +569,8 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
         let cond = Conditions::merge(conds);
 
         let spec = Spec {
-            term: spec_ident(self.cfg.term.clone()),
-            args: self.cfg.args.iter().cloned().map(spec_ident).collect(),
+            term: spec_ident(cfg.term.clone()),
+            args: cfg.args.iter().cloned().map(spec_ident).collect(),
             requires: cond.requires,
             provides: cond.provides,
         };
