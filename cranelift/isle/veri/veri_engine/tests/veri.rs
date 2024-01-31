@@ -3200,6 +3200,21 @@ fn test_broken_imm_udiv_cve_underlying_32() {
     })
 }
 
+// ISA spec test:
+//  1. add_alu_rrr lowers add to alu_rrr
+//  2. alu_rrr lowers to MInst.AluRRR
+
+#[test]
+fn test_named_add_alu_rrr() {
+    run_and_retry(|| {
+        test_aarch64_rule_with_lhs_termname_simple(
+            "add_alu_rrr",
+            "add",
+            vec![(Bitwidth::I64, VerificationResult::Success)],
+        )
+    })
+}
+
 #[test]
 fn test_named_alu_rrr_emit() {
     run_and_retry(|| {

@@ -2015,24 +2015,31 @@
         dst))
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
-(spec (alu_rrr op t a b)
+(spec (alu_rrr op ty a b)
     (provide
-      (= result (switch op
-              ((ALUOp.Lsr)
-                (if (<= t 32)
-                    (conv_to 64 (bvlshr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
-                    (bvlshr a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
-              ((ALUOp.Asr)
-                (if (<= t 32)
-                    (conv_to 64 (bvashr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
-                    (bvashr a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
-              ((ALUOp.Lsl)
-                (if (<= t 32)
-                    (conv_to 64 (bvshl (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
-                    (bvshl a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b)))))))
+            (= result (switch op
+              ;; ((ALUOp.Lsr)
+              ;;   (if (<= t 32)
+              ;;       (conv_to 64 (bvlshr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
+              ;;       (bvlshr a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
+              ;; ((ALUOp.Asr)
+              ;;   (if (<= t 32)
+              ;;       (conv_to 64 (bvashr (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
+              ;;       (bvashr a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
+              ;; ((ALUOp.Lsl)
+              ;;   (if (<= t 32)
+              ;;       (conv_to 64 (bvshl (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
+              ;;       (bvshl a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
+                  ((ALUOp.Add)
+                        (if (<= ty 32)
+                              (conv_to 64 (bvadd (extract 31 0 a) (extract 31 0 b)))
+                              (bvadd a b))))))
     (require
-      (or (= op (ALUOp.Lsr)) (= op (ALUOp.Asr)) (= op (ALUOp.Lsl)))
-      (or (= t 8) (= t 16) (= t 32) (= t 64))))
+      ; (or (= op (ALUOp.Lsr)) (= op (ALUOp.Asr)) (= op (ALUOp.Lsl)))
+      (or (= op (ALUOp.Add)))
+      (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))
+      )
+)
 (decl alu_rrr (ALUOp Type Reg Reg) Reg)
 (instantiate alu_rrr
     ((args (bv 8) Int (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
@@ -2633,13 +2640,22 @@
 
 ;; Helpers for generating `add` instructions.
 (spec (add ty a b)
-  (provide
-    (= result
-       (if (<= ty 32)
-           (conv_to 64 (bvadd (extract 31 0 a) (extract 31 0 b)))
-           (bvadd a b)))))
+      (provide
+            (= result
+                  (if (<= ty 32)
+                        (conv_to 64 (bvadd (extract 31 0 a) (extract 31 0 b)))
+                        (bvadd a b)))
+      )
+      (require
+            (= ty (widthof a))
+            (= ty (widthof b))
+      )
+)
 (decl add (Type Reg Reg) Reg)
-(rule (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
+(instantiate add
+    ((args Int (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(rule add_alu_rrr (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
 
 (spec (add_imm ty a b)
   (provide

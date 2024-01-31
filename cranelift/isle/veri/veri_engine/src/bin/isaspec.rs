@@ -144,6 +144,14 @@ fn define() -> Vec<SpecConfig> {
             .collect(),
     };
 
+    // Inst::Extend {
+    //     rd: writable_xreg(1),
+    //     rn: xreg(2),
+    //     signed: true,
+    //     from_bits: 8,
+    //     to_bits: 32,
+    // },
+
     vec![alu_rrr]
 }
 
