@@ -2030,14 +2030,15 @@
               ;;   (if (<= t 32)
               ;;       (conv_to 64 (bvshl (extract 31 0 a) (bvand (bvsub (int2bv 32 32) #x00000001) (extract 31 0 b))))
               ;;       (bvshl a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b))))
-                  ((ALUOp.Add)
+                  ((ALUOp.And)
                         (if (<= ty 32)
-                              (conv_to 64 (bvadd (extract 31 0 a) (extract 31 0 b)))
-                              (bvadd a b))))))
+                              (conv_to 64 (bvand (extract 31 0 a) (extract 31 0 b)))
+                              (bvand a b))))))
     (require
       ; (or (= op (ALUOp.Lsr)) (= op (ALUOp.Asr)) (= op (ALUOp.Lsl)))
-      (or (= op (ALUOp.Add)))
-      (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))
+      (or (= op (ALUOp.And)))
+      ; (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))
+      (or (= ty 64))
       )
 )
 (decl alu_rrr (ALUOp Type Reg Reg) Reg)
@@ -3169,9 +3170,15 @@
        (if (<= ty 32)
          (conv_to 64 (bvand (extract 31 0 a) (extract 31 0 b)))
          (bvand a b))))
-  (require (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
+  (require
+      ; (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))
+      (= ty 64)
+      ))
 (decl and_reg (Type Reg Reg) Reg)
-(rule (and_reg ty x y) (alu_rrr (ALUOp.And) ty x y))
+(instantiate and_reg
+    ((args Int (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(rule and_reg_alu_rrr (and_reg ty x y) (alu_rrr (ALUOp.And) ty x y))
 
 (spec (and_imm ty x y)
   (provide

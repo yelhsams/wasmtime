@@ -77,14 +77,14 @@ fn main() -> anyhow::Result<()> {
 fn define() -> Vec<SpecConfig> {
     // ALUOp
     let alu_ops = vec![
-        ALUOp::Add,
-        ALUOp::Sub,
-        ALUOp::Orr,
-        ALUOp::OrrNot,
+        //ALUOp::Add, // 128-bit ops
+        //ALUOp::Sub, // 128-bit ops
+        //ALUOp::Orr,
+        //ALUOp::OrrNot,
         ALUOp::And,
-        ALUOp::AndNot,
-        ALUOp::Eor,
-        ALUOp::EorNot,
+        //ALUOp::AndNot,
+        //ALUOp::Eor,
+        //ALUOp::EorNot,
         //ALUOp::Lsr,
         //ALUOp::Asr,
         //ALUOp::Lsl,
