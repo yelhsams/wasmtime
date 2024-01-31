@@ -4528,23 +4528,34 @@
 (decl lower_icmp_into_flags (IntCC Value Value Type) FlagsAndCC)
 
 (spec (lower_icmp_const c x y in_ty)
-  (provide
-    (= result
-       (bvor (bvshl (zero_ext 12
-          (extract 67 64
-          (if (and (bvuge c #x02) (bvule c #x05))
-            (if (<= in_ty 32)
-              (subs 32 (sign_ext 64 x) y)
-              (subs 64 (sign_ext 64 x) y))
-            (if (<= in_ty 32)
-              (subs 32 (zero_ext 64 x) y)
-              (subs 64 (zero_ext 64 x) y)))))
-         #x008)
-      (zero_ext 12 c))))
-  (require
-    (bvule c #x09)
-    (or (= in_ty 32) (= in_ty 64))
-    (= in_ty (widthof x))))
+      (provide
+            (= result
+               (concat (extract 67 64
+                              (if (or (= c (IntCC.SignedGreaterThanOrEqual))
+                                      (= c (IntCC.SignedGreaterThan))
+                                      (= c (IntCC.SignedLessThanOrEqual))
+                                      (= c (IntCC.SignedLessThan)))
+                                    (if (<= in_ty 32)
+                                          (subs 32 (sign_ext 64 x) y)
+                                          (subs 64 (sign_ext 64 x) y))
+                                    (if (<= in_ty 32)
+                                          (subs 32 (zero_ext 64 x) y)
+                                          (subs 64 (zero_ext 64 x) y))))
+                       c)))
+       (require
+            (or
+                (= c (IntCC.Equal))
+                (= c (IntCC.NotEqual))
+                (= c (IntCC.UnsignedGreaterThanOrEqual))
+                (= c (IntCC.UnsignedGreaterThan))
+                (= c (IntCC.UnsignedLessThanOrEqual))
+                (= c (IntCC.UnsignedLessThan))
+                (= c (IntCC.SignedGreaterThanOrEqual))
+                (= c (IntCC.SignedGreaterThan))
+                (= c (IntCC.SignedLessThanOrEqual))
+                (= c (IntCC.SignedLessThan)))
+            (or (= in_ty 32) (= in_ty 64))
+            (= in_ty (widthof x))))
 (instantiate lower_icmp_const
     ((args (bv 8) (bv 8) (bv 64) Int) (ret (bv 12)) (canon (bv 8)))
     ((args (bv 8) (bv 16) (bv 64) Int) (ret (bv 12)) (canon (bv 16)))
@@ -4603,35 +4614,6 @@
       (if (ty_int_ref_scalar_64 ty))
       (flags_and_cc (cmp (operand_size ty) rn rm) cond))
 
-(spec (lower_icmp_const c x y in_ty)
-      (provide
-            (= result
-               (concat (extract 67 64
-                              (if (or (= c (IntCC.SignedGreaterThanOrEqual))
-                                      (= c (IntCC.SignedGreaterThan))
-                                      (= c (IntCC.SignedLessThanOrEqual))
-                                      (= c (IntCC.SignedLessThan)))
-                                    (if (<= in_ty 32)
-                                          (subs 32 (sign_ext 64 x) y)
-                                          (subs 64 (sign_ext 64 x) y))
-                                    (if (<= in_ty 32)
-                                          (subs 32 (zero_ext 64 x) y)
-                                          (subs 64 (zero_ext 64 x) y))))
-                       c)))
-       (require
-            (or
-                (= c (IntCC.Equal))
-                (= c (IntCC.NotEqual))
-                (= c (IntCC.UnsignedGreaterThanOrEqual))
-                (= c (IntCC.UnsignedGreaterThan))
-                (= c (IntCC.UnsignedLessThanOrEqual))
-                (= c (IntCC.UnsignedLessThan))
-                (= c (IntCC.SignedGreaterThanOrEqual))
-                (= c (IntCC.SignedGreaterThan))
-                (= c (IntCC.SignedLessThanOrEqual))
-                (= c (IntCC.SignedLessThan)))
-            (or (= in_ty 32) (= in_ty 64))
-            (= in_ty (widthof x))))
 ;; We get better encodings when testing against an immediate that's even instead
 ;; of odd, so rewrite comparisons to use even immediates:
 ;;
