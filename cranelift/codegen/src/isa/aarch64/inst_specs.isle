@@ -1,8 +1,12 @@
 (spec
     (MInst.AluRRR alu_op size rd rn rm)
     (provide
-        (= rn v544)
-        (= rm v546)
-        (= v550 (bvand (extract 63 0 v544) (extract 63 0 v546)))
-        (= rd v550))
-    (require (= alu_op (ALUOp.And)) (= size (OperandSize.Size64))))
+        (= rn v536)
+        (= rm v538)
+        (=
+            v581
+            (bvadd
+                (extract 63 0 (zero_ext 128 (extract 63 0 v536)))
+                (extract 63 0 (zero_ext 128 (extract 63 0 v538)))))
+        (= rd v581))
+    (require (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64))))

@@ -77,29 +77,30 @@ fn main() -> anyhow::Result<()> {
 fn define() -> Vec<SpecConfig> {
     // ALUOp
     let alu_ops = vec![
-        //ALUOp::Add, // 128-bit ops
-        //ALUOp::Sub, // 128-bit ops
-        //ALUOp::Orr,
-        //ALUOp::OrrNot,
-        ALUOp::And,
-        //ALUOp::AndNot,
-        //ALUOp::Eor,
-        //ALUOp::EorNot,
-        //ALUOp::Lsr,
-        //ALUOp::Asr,
-        //ALUOp::Lsl,
-        //ALUOp::AndS, // 2 code paths
-        //ALUOp::AddS,
-        //ALUOp::SubS,
-        //ALUOp::SMulH,
-        //ALUOp::UMulH,
-        //ALUOp::SDiv,
-        //ALUOp::UDiv,
-        //ALUOp::RotR,
-        //ALUOp::Adc,
-        //ALUOp::AdcS,
-        //ALUOp::Sbc,
-        //ALUOp::SbcS,
+        ALUOp::Add, // 128-bit ops
+
+                    //ALUOp::Sub, // 128-bit ops
+                    //ALUOp::Orr,
+                    //ALUOp::OrrNot,
+                    //ALUOp::And,
+                    //ALUOp::AndNot,
+                    //ALUOp::Eor,
+                    //ALUOp::EorNot,
+                    //ALUOp::Lsr,
+                    //ALUOp::Asr,
+                    //ALUOp::Lsl,
+                    //ALUOp::AndS, // 2 code paths
+                    //ALUOp::AddS,
+                    //ALUOp::SubS,
+                    //ALUOp::SMulH,
+                    //ALUOp::UMulH,
+                    //ALUOp::SDiv,
+                    //ALUOp::UDiv,
+                    //ALUOp::RotR,
+                    //ALUOp::Adc,
+                    //ALUOp::AdcS,
+                    //ALUOp::Sbc,
+                    //ALUOp::SbcS,
     ];
 
     // AluRRR
