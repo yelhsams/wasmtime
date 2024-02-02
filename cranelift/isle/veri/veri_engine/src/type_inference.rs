@@ -1675,6 +1675,23 @@ fn solve_constraints(
     vals: &mut HashMap<u32, i128>,
     ty_vars: Option<&HashMap<veri_ir::Expr, u32>>,
 ) -> (HashMap<u32, annotation_ir::Type>, HashMap<u32, u32>) {
+    // // Debug output.
+    // for type_expr in &concrete {
+    //     println!("{type_expr:?}");
+    // }
+    // for type_expr in &var {
+    //     println!("{type_expr:?}");
+    // }
+    // for type_expr in &bv {
+    //     println!("{type_expr:?}");
+    // }
+
+    // if let Some(expr_to_ty_var) = ty_vars {
+    //     for (expr, ty_var) in expr_to_ty_var {
+    //         println!("{ty_var:?}\t{expr:?}");
+    //     }
+    // }
+
     // maintain a union find that maps types to sets of type vars that have that type
     let mut union_find = HashMap::new();
     let mut poly = 0;
