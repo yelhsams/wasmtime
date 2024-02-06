@@ -2,7 +2,6 @@ use crate::annotations::AnnotationEnv;
 use crate::termname::pattern_contains_termname;
 use cranelift_isle as isle;
 use easy_smt::{Response, SExpr};
-use isle::ast::Form;
 use isle::sema::{Pattern, TermEnv, TermId, TypeEnv, VarId};
 use itertools::izip;
 use itertools::Itertools;
@@ -1681,7 +1680,7 @@ fn solve_constraints(
 ) -> (HashMap<u32, annotation_ir::Type>, HashMap<u32, u32>) {
     // SMT
     println!("- START: smt type inference --------------------------");
-    solve_constraints_smt(&concrete, &var, &bv);
+    solve_constraints_smt(&concrete, &var, &bv, vals);
     println!("- END: smt type inference ----------------------------");
 
     // Use the original unification-based algorithm.
@@ -1705,7 +1704,9 @@ fn solve_constraints_unify(
     // for type_expr in &bv {
     //     println!("{type_expr:?}");
     // }
-
+    // for (v, val) in &*vals {
+    //     println!("{v} = {val}");
+    // }
     // if let Some(expr_to_ty_var) = ty_vars {
     //     for (expr, ty_var) in expr_to_ty_var {
     //         println!("{ty_var:?}\t{expr:?}");
@@ -1996,7 +1997,7 @@ fn solve_constraints_smt(
     concrete: &HashSet<TypeExpr>,
     var: &HashSet<TypeExpr>,
     bv: &HashSet<TypeExpr>,
-    //vals: &mut HashMap<u32, i128>,
+    vals: &mut HashMap<u32, i128>,
     //ty_vars: Option<&HashMap<veri_ir::Expr, u32>>,
 ) -> (HashMap<u32, annotation_ir::Type>, HashMap<u32, u32>) {
     // Setup
@@ -2010,6 +2011,8 @@ fn solve_constraints_smt(
     solver.add_constraints(concrete);
     solver.add_constraints(var);
     solver.add_constraints(bv);
+    solver.set_values(vals);
+
     solver.check_sat();
 
     // Results.
@@ -2052,6 +2055,32 @@ impl TypeSolver {
         }
     }
 
+    fn set_values(&mut self, vals: &HashMap<u32, i128>) {
+        for (v, n) in vals {
+            self.set_value(*v, *n);
+        }
+    }
+
+    fn set_value(&mut self, v: u32, n: i128) {
+        // If it's an integer, it should have this value.
+        let symbolic_type = self.get_symbolic_type(v);
+        self.smt
+            .assert(
+                self.smt.imp(
+                    self.smt.eq(
+                        symbolic_type.discriminant.expr,
+                        self.smt.numeral(TypeDiscriminant::Int as u8),
+                    ),
+                    self.smt.and(
+                        symbolic_type.integer_value.some.expr,
+                        self.smt
+                            .eq(symbolic_type.integer_value.value.expr, self.smt.numeral(n)),
+                    ),
+                ),
+            )
+            .unwrap();
+    }
+
     fn concrete(&mut self, v: u32, ty: &annotation_ir::Type) {
         let symbolic_type = self.get_symbolic_type(v);
         match ty {
@@ -2087,7 +2116,6 @@ impl TypeSolver {
         self.assert_type_discriminant(&bitvector_type, TypeDiscriminant::BitVector);
         self.assert_type_discriminant(&width_type, TypeDiscriminant::Int);
         self.assert_options_equal(&bitvector_type.bitvector_width, &width_type.integer_value)
-        // TODO(mbm): assert that the bitvector has a known width?
     }
 
     fn assert_type_discriminant(&mut self, symbolic_type: &SymbolicType, disc: TypeDiscriminant) {
@@ -2104,9 +2132,10 @@ impl TypeSolver {
     }
 
     fn assert_types_equal(&mut self, a: &SymbolicType, b: &SymbolicType) {
+        // Note that we assert nothing about the integer value, only that the
+        // types are the same.
         self.assert_variables_equal(&a.discriminant, &b.discriminant);
         self.assert_options_equal(&a.bitvector_width, &b.bitvector_width);
-        self.assert_options_equal(&a.integer_value, &b.integer_value);
     }
 
     fn assert_options_equal(&mut self, a: &SymbolicOption, b: &SymbolicOption) {
