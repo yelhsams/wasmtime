@@ -1,7 +1,7 @@
 use crate::annotations::AnnotationEnv;
 use crate::termname::pattern_contains_termname;
 use cranelift_isle as isle;
-use easy_smt::SExpr;
+use easy_smt::{Response, SExpr};
 use isle::ast::Form;
 use isle::sema::{Pattern, TermEnv, TermId, TypeEnv, VarId};
 use itertools::izip;
@@ -2010,6 +2010,7 @@ fn solve_constraints_smt(
     solver.add_constraints(concrete);
     solver.add_constraints(var);
     solver.add_constraints(bv);
+    solver.check_sat();
 
     // Results.
     let result = HashMap::new();
@@ -2032,6 +2033,11 @@ impl TypeSolver {
         }
     }
 
+    fn check_sat(&mut self) {
+        let response = self.smt.check().unwrap();
+        assert_eq!(response, Response::Sat);
+    }
+
     fn add_constraints(&mut self, type_exprs: &HashSet<TypeExpr>) {
         for type_expr in type_exprs {
             self.add_constraint(type_expr);
@@ -2041,13 +2047,8 @@ impl TypeSolver {
     fn add_constraint(&mut self, type_expr: &TypeExpr) {
         match type_expr {
             TypeExpr::Concrete(v, ty) => self.concrete(*v, ty),
-            TypeExpr::Variable(u, v) => {
-                let a = self.get_symbolic_type(*u);
-                let b = self.get_symbolic_type(*v);
-                self.assert_types_equal(&a, &b);
-            }
-            // WidthInt(u32, u32) =>
-            _ => println!("unimplemented: constraint: {type_expr:?}"),
+            TypeExpr::Variable(u, v) => self.variable(*u, *v),
+            TypeExpr::WidthInt(v, w) => self.width_int(*v, *w),
         }
     }
 
@@ -2069,6 +2070,24 @@ impl TypeSolver {
             }
             _ => todo!("concrete: {ty:?}"),
         }
+    }
+
+    fn variable(&mut self, u: u32, v: u32) {
+        let a = self.get_symbolic_type(u);
+        let b = self.get_symbolic_type(v);
+        self.assert_types_equal(&a, &b);
+    }
+
+    fn width_int(&mut self, v: u32, w: u32) {
+        // Type v is a bitvector, type w is an integer, and the bitwidth of v is
+        // equal to the value of w.
+        let bitvector_type = self.get_symbolic_type(v);
+        let width_type = self.get_symbolic_type(w);
+
+        self.assert_type_discriminant(&bitvector_type, TypeDiscriminant::BitVector);
+        self.assert_type_discriminant(&width_type, TypeDiscriminant::Int);
+        self.assert_options_equal(&bitvector_type.bitvector_width, &width_type.integer_value)
+        // TODO(mbm): assert that the bitvector has a known width?
     }
 
     fn assert_type_discriminant(&mut self, symbolic_type: &SymbolicType, disc: TypeDiscriminant) {
