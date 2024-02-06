@@ -1,12 +1,15 @@
-use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
-
 use crate::annotations::AnnotationEnv;
 use crate::termname::pattern_contains_termname;
 use cranelift_isle as isle;
+use easy_smt::SExpr;
+use isle::ast::Form;
 use isle::sema::{Pattern, TermEnv, TermId, TypeEnv, VarId};
 use itertools::izip;
+use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 use veri_ir::{annotation_ir, ConcreteTest, Expr, TermSignature, Type, TypeContext};
 
 use crate::{Config, FLAGS_WIDTH, REG_WIDTH};
@@ -1668,7 +1671,24 @@ fn add_rule_constraints(
 //   bv -> t7, t8
 
 // TODO: clean up
+
 fn solve_constraints(
+    concrete: HashSet<TypeExpr>,
+    var: HashSet<TypeExpr>,
+    bv: HashSet<TypeExpr>,
+    vals: &mut HashMap<u32, i128>,
+    ty_vars: Option<&HashMap<veri_ir::Expr, u32>>,
+) -> (HashMap<u32, annotation_ir::Type>, HashMap<u32, u32>) {
+    // SMT
+    println!("- START: smt type inference --------------------------");
+    solve_constraints_smt(&concrete, &var, &bv);
+    println!("- END: smt type inference ----------------------------");
+
+    // Use the original unification-based algorithm.
+    solve_constraints_unify(concrete, var, bv, vals, ty_vars)
+}
+
+fn solve_constraints_unify(
     concrete: HashSet<TypeExpr>,
     var: HashSet<TypeExpr>,
     bv: HashSet<TypeExpr>,
@@ -1969,6 +1989,229 @@ fn annotation_type_for_vir_type(ty: &Type) -> annotation_ir::Type {
         Type::Int => annotation_ir::Type::Int,
     }
 }
+
+// --------------------------------------------------------------------------
+
+fn solve_constraints_smt(
+    concrete: &HashSet<TypeExpr>,
+    var: &HashSet<TypeExpr>,
+    bv: &HashSet<TypeExpr>,
+    //vals: &mut HashMap<u32, i128>,
+    //ty_vars: Option<&HashMap<veri_ir::Expr, u32>>,
+) -> (HashMap<u32, annotation_ir::Type>, HashMap<u32, u32>) {
+    // Setup
+    let smt = easy_smt::ContextBuilder::new()
+        .replay_file(Some(std::fs::File::create("type_solver.smt2").unwrap()))
+        .solver("z3", ["-smt2", "-in"])
+        .build()
+        .unwrap();
+
+    let mut solver = TypeSolver::new(smt);
+    solver.add_constraints(concrete);
+    solver.add_constraints(var);
+    solver.add_constraints(bv);
+
+    // Results.
+    let result = HashMap::new();
+    let bv_unknown_width_sets = HashMap::new();
+    (result, bv_unknown_width_sets)
+}
+
+struct TypeSolver {
+    smt: easy_smt::Context,
+
+    // Symbolic type for each type variable.
+    symbolic_types: HashMap<u32, SymbolicType>,
+}
+
+impl TypeSolver {
+    fn new(smt: easy_smt::Context) -> Self {
+        Self {
+            smt,
+            symbolic_types: HashMap::new(),
+        }
+    }
+
+    fn add_constraints(&mut self, type_exprs: &HashSet<TypeExpr>) {
+        for type_expr in type_exprs {
+            self.add_constraint(type_expr);
+        }
+    }
+
+    fn add_constraint(&mut self, type_expr: &TypeExpr) {
+        match type_expr {
+            TypeExpr::Concrete(v, ty) => self.concrete(*v, ty),
+            TypeExpr::Variable(u, v) => {
+                let a = self.get_symbolic_type(*u);
+                let b = self.get_symbolic_type(*v);
+                self.assert_types_equal(&a, &b);
+            }
+            // WidthInt(u32, u32) =>
+            _ => println!("unimplemented: constraint: {type_expr:?}"),
+        }
+    }
+
+    fn concrete(&mut self, v: u32, ty: &annotation_ir::Type) {
+        let symbolic_type = self.get_symbolic_type(v);
+        match ty {
+            annotation_ir::Type::BitVector => {
+                self.assert_type_discriminant(&symbolic_type, TypeDiscriminant::BitVector);
+            }
+            annotation_ir::Type::BitVectorWithWidth(w) => {
+                self.assert_type_discriminant(&symbolic_type, TypeDiscriminant::BitVector);
+                self.assert_option_value(&symbolic_type.bitvector_width, self.smt.numeral(*w));
+            }
+            annotation_ir::Type::Int => {
+                self.assert_type_discriminant(&symbolic_type, TypeDiscriminant::Int)
+            }
+            annotation_ir::Type::Bool => {
+                self.assert_type_discriminant(&symbolic_type, TypeDiscriminant::Bool)
+            }
+            _ => todo!("concrete: {ty:?}"),
+        }
+    }
+
+    fn assert_type_discriminant(&mut self, symbolic_type: &SymbolicType, disc: TypeDiscriminant) {
+        let disc = self.smt.numeral(disc as u8);
+        let eq = self.smt.eq(symbolic_type.discriminant.expr, disc);
+        self.smt.assert(eq).unwrap();
+    }
+
+    fn assert_option_value(&mut self, symbolic_option: &SymbolicOption, value: SExpr) {
+        self.smt.assert(symbolic_option.some.expr).unwrap();
+        self.smt
+            .assert(self.smt.eq(symbolic_option.value.expr, value))
+            .unwrap();
+    }
+
+    fn assert_types_equal(&mut self, a: &SymbolicType, b: &SymbolicType) {
+        self.assert_variables_equal(&a.discriminant, &b.discriminant);
+        self.assert_options_equal(&a.bitvector_width, &b.bitvector_width);
+        self.assert_options_equal(&a.integer_value, &b.integer_value);
+    }
+
+    fn assert_options_equal(&mut self, a: &SymbolicOption, b: &SymbolicOption) {
+        self.assert_variables_equal(&a.some, &b.some);
+        self.assert_variables_equal(&a.value, &b.value);
+    }
+
+    fn assert_variables_equal(&mut self, a: &SymbolicVariable, b: &SymbolicVariable) {
+        self.smt.assert(self.smt.eq(a.expr, b.expr)).unwrap();
+    }
+
+    fn get_symbolic_type(&mut self, v: u32) -> SymbolicType {
+        self.symbolic_types
+            .entry(v)
+            .or_insert_with(|| SymbolicType::decl(&mut self.smt, v))
+            .clone()
+    }
+}
+
+#[derive(Clone)]
+struct SymbolicVariable {
+    name: String,
+    expr: SExpr,
+}
+
+impl SymbolicVariable {
+    fn integer(smt: &mut easy_smt::Context, name: String) -> Self {
+        Self::decl_sort(smt, name, smt.int_sort())
+    }
+
+    fn boolean(smt: &mut easy_smt::Context, name: String) -> Self {
+        Self::decl_sort(smt, name, smt.bool_sort())
+    }
+
+    fn decl_sort(smt: &mut easy_smt::Context, name: String, sort: SExpr) -> Self {
+        smt.declare_const(name.clone(), sort).unwrap();
+        let expr = smt.atom(name.clone());
+        Self { name, expr }
+    }
+}
+
+#[derive(Clone)]
+struct SymbolicOption {
+    some: SymbolicVariable,
+    value: SymbolicVariable,
+}
+
+impl SymbolicOption {
+    fn decl(smt: &mut easy_smt::Context, value: SymbolicVariable) -> Self {
+        let some = SymbolicVariable::boolean(smt, format!("{}_some", value.name));
+        Self { some, value }
+    }
+}
+
+#[derive(EnumIter)]
+enum TypeDiscriminant {
+    BitVector = 1,
+    Int = 2,
+    Bool = 3,
+}
+
+impl TypeDiscriminant {}
+
+#[derive(Clone)]
+struct SymbolicType {
+    discriminant: SymbolicVariable,
+    bitvector_width: SymbolicOption,
+    integer_value: SymbolicOption,
+}
+
+impl SymbolicType {
+    fn decl(smt: &mut easy_smt::Context, v: u32) -> Self {
+        let prefix = format!("t{}", v);
+
+        // Disciminant.
+        let discriminant = SymbolicVariable::integer(smt, format!("{prefix}_disc"));
+
+        // Invariant: discriminant is one of the allowed values
+        smt.assert(smt.or_many(
+            TypeDiscriminant::iter().map(|d| smt.eq(discriminant.expr, smt.numeral(d as u8))),
+        ))
+        .unwrap();
+
+        // Bitvector width (option).
+        let bitvector_width_value =
+            SymbolicVariable::integer(smt, format!("{prefix}_bitvector_width"));
+        let bitvector_width = SymbolicOption::decl(smt, bitvector_width_value);
+
+        // Invariant: if not bitvector then bitvector width option is (false, 0).
+        smt.assert(smt.imp(
+            smt.distinct(
+                discriminant.expr,
+                smt.numeral(TypeDiscriminant::BitVector as u8),
+            ),
+            smt.and(
+                smt.not(bitvector_width.some.expr),
+                smt.eq(bitvector_width.value.expr, smt.numeral(0)),
+            ),
+        ))
+        .unwrap();
+
+        // Integer value.
+        let integer_value_value = SymbolicVariable::integer(smt, format!("{prefix}_integer_value"));
+        let integer_value = SymbolicOption::decl(smt, integer_value_value);
+
+        // Invariant: if not integer then integer option is (false, 0).
+        smt.assert(smt.imp(
+            smt.distinct(discriminant.expr, smt.numeral(TypeDiscriminant::Int as u8)),
+            smt.and(
+                smt.not(integer_value.some.expr),
+                smt.eq(integer_value.value.expr, smt.numeral(0)),
+            ),
+        ))
+        .unwrap();
+
+        Self {
+            discriminant,
+            bitvector_width,
+            integer_value,
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
 
 fn create_parse_tree_pattern(
     rule: &isle::sema::Rule,
