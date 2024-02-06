@@ -1,6 +1,7 @@
 use crate::annotations::AnnotationEnv;
 use crate::termname::pattern_contains_termname;
 use cranelift_isle as isle;
+use easy_smt::SExprData;
 use easy_smt::{Response, SExpr};
 use isle::sema::{Pattern, TermEnv, TermId, TypeEnv, VarId};
 use itertools::izip;
@@ -8,7 +9,7 @@ use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
+use strum_macros::{EnumIter, FromRepr};
 use veri_ir::{annotation_ir, ConcreteTest, Expr, TermSignature, Type, TypeContext};
 
 use crate::{Config, FLAGS_WIDTH, REG_WIDTH};
@@ -2039,6 +2040,64 @@ impl TypeSolver {
     fn check_sat(&mut self) {
         let response = self.smt.check().unwrap();
         assert_eq!(response, Response::Sat);
+
+        let vs: Vec<_> = self.symbolic_types.keys().copied().collect();
+        for v in vs {
+            let ty = self.get_type(v);
+            println!("model: {v} = {ty:?}");
+        }
+    }
+
+    fn get_type(&mut self, v: u32) -> annotation_ir::Type {
+        let symbolic_type = self.get_symbolic_type(v);
+
+        // Lookup disciminant from the model.
+        let discriminant_value =
+            usize::try_from(self.get_value_data(symbolic_type.discriminant.expr))
+                .expect("discriminant value should be integer");
+        let discriminant =
+            TypeDiscriminant::from_repr(discriminant_value).expect("unknown discriminant value");
+
+        match discriminant {
+            TypeDiscriminant::BitVector => {
+                // Is the bitvector width known?
+                let has_width = self.get_bool_value(symbolic_type.bitvector_width.some.expr);
+                if !has_width {
+                    return annotation_ir::Type::BitVector;
+                }
+
+                // Lookup width.
+                let width =
+                    usize::try_from(self.get_value_data(symbolic_type.bitvector_width.value.expr))
+                        .expect("bitvector width should be integer");
+
+                annotation_ir::Type::BitVectorWithWidth(width)
+            }
+            TypeDiscriminant::Bool => annotation_ir::Type::Bool,
+            TypeDiscriminant::Int => annotation_ir::Type::Int,
+        }
+    }
+
+    fn get_bool_value(&mut self, expr: SExpr) -> bool {
+        let value = self.get_value(expr);
+        if value == self.smt.true_() {
+            true
+        } else if value == self.smt.false_() {
+            false
+        } else {
+            unreachable!("value is not boolean");
+        }
+    }
+
+    fn get_value_data(&mut self, expr: SExpr) -> SExprData {
+        let value = self.get_value(expr);
+        self.smt.get(value)
+    }
+
+    fn get_value(&mut self, expr: SExpr) -> SExpr {
+        let values = self.smt.get_value(vec![expr]).unwrap();
+        assert_eq!(values.len(), 1);
+        values[0].1
     }
 
     fn add_constraints(&mut self, type_exprs: &HashSet<TypeExpr>) {
@@ -2190,14 +2249,12 @@ impl SymbolicOption {
     }
 }
 
-#[derive(EnumIter)]
+#[derive(EnumIter, FromRepr, Debug)]
 enum TypeDiscriminant {
     BitVector = 1,
     Int = 2,
     Bool = 3,
 }
-
-impl TypeDiscriminant {}
 
 #[derive(Clone)]
 struct SymbolicType {
