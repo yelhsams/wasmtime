@@ -1681,11 +1681,22 @@ fn solve_constraints(
 ) -> (HashMap<u32, annotation_ir::Type>, HashMap<u32, u32>) {
     // SMT
     println!("- START: smt type inference --------------------------");
-    solve_constraints_smt(&concrete, &var, &bv, vals);
+    let (result_smt, _) = solve_constraints_smt(&concrete, &var, &bv, vals);
     println!("- END: smt type inference ----------------------------");
 
     // Use the original unification-based algorithm.
-    solve_constraints_unify(concrete, var, bv, vals, ty_vars)
+    let (result_unify, bv_unknown_width_sets) =
+        solve_constraints_unify(concrete, var, bv, vals, ty_vars);
+
+    // Check equivalence (on the results returns by unification).
+    for (v, ty) in &result_unify {
+        let type_unify = convert_type(ty);
+        let type_smt = convert_type(&result_smt[v]);
+        assert_eq!(type_unify, type_smt);
+    }
+
+    // Return the original.
+    (result_unify, bv_unknown_width_sets)
 }
 
 fn solve_constraints_unify(
@@ -2014,10 +2025,8 @@ fn solve_constraints_smt(
     solver.add_constraints(bv);
     solver.set_values(vals);
 
-    solver.check_sat();
+    let result = solver.solve();
 
-    // Results.
-    let result = HashMap::new();
     let bv_unknown_width_sets = HashMap::new();
     (result, bv_unknown_width_sets)
 }
@@ -2037,15 +2046,17 @@ impl TypeSolver {
         }
     }
 
-    fn check_sat(&mut self) {
+    fn solve(&mut self) -> HashMap<u32, annotation_ir::Type> {
+        // TODO(mbm): return result rather than assert
         let response = self.smt.check().unwrap();
         assert_eq!(response, Response::Sat);
 
         let vs: Vec<_> = self.symbolic_types.keys().copied().collect();
+        let mut tys = HashMap::new();
         for v in vs {
-            let ty = self.get_type(v);
-            println!("model: {v} = {ty:?}");
+            tys.insert(v, self.get_type(v));
         }
+        tys
     }
 
     fn get_type(&mut self, v: u32) -> annotation_ir::Type {
