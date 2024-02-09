@@ -2292,16 +2292,20 @@ impl SymbolicType {
             SymbolicVariable::integer(smt, format!("{prefix}_bitvector_width"));
         let bitvector_width = SymbolicOption::decl(smt, bitvector_width_value);
 
-        // Invariant: if not bitvector then bitvector width option is (false, 0).
+        // Invariant: if not bitvector then bitvector width option is none.
         smt.assert(smt.imp(
             smt.distinct(
                 discriminant.expr,
                 smt.numeral(TypeDiscriminant::BitVector as u8),
             ),
-            smt.and(
-                smt.not(bitvector_width.some.expr),
-                smt.eq(bitvector_width.value.expr, smt.numeral(0)),
-            ),
+            smt.not(bitvector_width.some.expr),
+        ))
+        .unwrap();
+
+        // Invariant: if bitvector width option is none, then its value is 0.
+        smt.assert(smt.imp(
+            smt.not(bitvector_width.some.expr),
+            smt.eq(bitvector_width.value.expr, smt.numeral(0)),
         ))
         .unwrap();
 
@@ -2309,13 +2313,17 @@ impl SymbolicType {
         let integer_value_value = SymbolicVariable::integer(smt, format!("{prefix}_integer_value"));
         let integer_value = SymbolicOption::decl(smt, integer_value_value);
 
-        // Invariant: if not integer then integer option is (false, 0).
+        // Invariant: if not integer then integer value option is none.
         smt.assert(smt.imp(
             smt.distinct(discriminant.expr, smt.numeral(TypeDiscriminant::Int as u8)),
-            smt.and(
-                smt.not(integer_value.some.expr),
-                smt.eq(integer_value.value.expr, smt.numeral(0)),
-            ),
+            smt.not(integer_value.some.expr),
+        ))
+        .unwrap();
+
+        // Invariant: if integer value option is none, then its value is 0.
+        smt.assert(smt.imp(
+            smt.not(integer_value.some.expr),
+            smt.eq(integer_value.value.expr, smt.numeral(0)),
         ))
         .unwrap();
 
