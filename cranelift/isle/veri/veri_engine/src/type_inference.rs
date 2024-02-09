@@ -293,7 +293,7 @@ fn type_annotations_using_rule<'a>(
                 .var_constraints
                 .insert(TypeExpr::Variable(lhs.type_var, rhs.type_var));
 
-            let (solution, bv_unknown_width_sets) = solve_constraints(
+            let (solution, solution_smt, bv_unknown_width_sets) = solve_constraints(
                 parse_tree.concrete_constraints,
                 parse_tree.var_constraints,
                 parse_tree.bv_constraints,
@@ -302,12 +302,22 @@ fn type_annotations_using_rule<'a>(
             );
 
             let mut tymap = HashMap::new();
+            let mut tymap_smt = HashMap::new();
 
             for (expr, t) in &parse_tree.ty_vars {
                 if let Some(ty) = solution.get(&t) {
                     tymap.insert(*t, convert_type(ty));
                 } else {
                     panic!("missing type variable {} in solution for: {:?}", t, expr);
+                }
+
+                if let Some(ty) = solution_smt.get(&t) {
+                    tymap_smt.insert(*t, convert_type(ty));
+                } else {
+                    panic!(
+                        "missing type variable {} in smt solution for: {:?}",
+                        t, expr
+                    );
                 }
             }
             let mut quantified_vars = vec![];
@@ -352,6 +362,7 @@ fn type_annotations_using_rule<'a>(
                 tyctx: TypeContext {
                     tyvars: parse_tree.ty_vars.clone(),
                     tymap,
+                    tymap_smt,
                     tyvals: parse_tree.type_var_to_val_map,
                     bv_unknown_width_sets,
                 },
@@ -1678,7 +1689,11 @@ fn solve_constraints(
     bv: HashSet<TypeExpr>,
     vals: &mut HashMap<u32, i128>,
     ty_vars: Option<&HashMap<veri_ir::Expr, u32>>,
-) -> (HashMap<u32, annotation_ir::Type>, HashMap<u32, u32>) {
+) -> (
+    HashMap<u32, annotation_ir::Type>,
+    HashMap<u32, annotation_ir::Type>,
+    HashMap<u32, u32>,
+) {
     // SMT
     println!("- START: smt type inference --------------------------");
     let (result_smt, _) = solve_constraints_smt(&concrete, &var, &bv, vals);
@@ -1688,15 +1703,15 @@ fn solve_constraints(
     let (result_unify, bv_unknown_width_sets) =
         solve_constraints_unify(concrete, var, bv, vals, ty_vars);
 
-    // Check equivalence (on the results returns by unification).
-    for (v, ty) in &result_unify {
-        let type_unify = convert_type(ty);
-        let type_smt = convert_type(&result_smt[v]);
-        assert_eq!(type_unify, type_smt);
-    }
+    // // Check equivalence (on the results returns by unification).
+    // for (v, ty) in &result_unify {
+    //     let type_unify = convert_type(ty);
+    //     let type_smt = convert_type(&result_smt[v]);
+    //     assert_eq!(type_unify, type_smt);
+    // }
 
     // Return the original.
-    (result_unify, bv_unknown_width_sets)
+    (result_unify, result_smt, bv_unknown_width_sets)
 }
 
 fn solve_constraints_unify(
@@ -2695,7 +2710,7 @@ fn test_solve_constraints() {
         (5, annotation_ir::Type::BitVectorWithWidth(8)),
         (6, annotation_ir::Type::BitVectorWithWidth(16)),
     ]);
-    let (sol, bvsets) = solve_constraints(concrete, var, bv, &mut HashMap::new(), None);
+    let (sol, _, bvsets) = solve_constraints(concrete, var, bv, &mut HashMap::new(), None);
     assert_eq!(expected, sol);
     assert!(bvsets.is_empty());
 
@@ -2727,7 +2742,7 @@ fn test_solve_constraints() {
         (8, annotation_ir::Type::BitVectorUnknown(7)),
     ]);
     let expected_bvsets = HashMap::from([(7, 0), (8, 0)]);
-    let (sol, bvsets) = solve_constraints(concrete, var, bv, &mut HashMap::new(), None);
+    let (sol, _, bvsets) = solve_constraints(concrete, var, bv, &mut HashMap::new(), None);
     assert_eq!(expected, sol);
     assert_eq!(expected_bvsets, bvsets);
 }

@@ -1790,6 +1790,11 @@ fn resolve_dynamic_widths(
                             _ => (),
                         };
 
+                        // Check whether we agree with the result from
+                        // experimental SMT type inference.
+                        let ty_smt = ctx.tyctx.tymap_smt[&t];
+                        assert_eq!(ty_smt, Type::BitVector(Some(width_int as usize)));
+
                         // Check that the width is nonzero
                         if width_int <= 0 {
                             panic!("Unexpected, zero width! {} {:?}", t, e);
