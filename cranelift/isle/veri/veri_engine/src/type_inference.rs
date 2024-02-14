@@ -402,7 +402,7 @@ fn add_annotation_constraints(
             tree.type_var_to_val_map.insert(t, c.value);
             (e, t)
         }
-        annotation_ir::Expr::True(_) => {
+        annotation_ir::Expr::True => {
             let t = tree.next_type_var;
             tree.concrete_constraints
                 .insert(TypeExpr::Concrete(t, annotation_ir::Type::Bool));
@@ -410,7 +410,7 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::Terminal(veri_ir::Terminal::True), t)
         }
-        annotation_ir::Expr::False(_) => {
+        annotation_ir::Expr::False => {
             let t = tree.next_type_var;
             tree.concrete_constraints
                 .insert(TypeExpr::Concrete(t, annotation_ir::Type::Bool));
@@ -419,7 +419,7 @@ fn add_annotation_constraints(
             (veri_ir::Expr::Terminal(veri_ir::Terminal::False), t)
         }
 
-        annotation_ir::Expr::WidthOf(x, _) => {
+        annotation_ir::Expr::WidthOf(x) => {
             let (ex, tx) = add_annotation_constraints(*x.clone(), tree, annotation_info);
             let t = tree.next_type_var;
             tree.next_type_var += 1;
@@ -431,7 +431,7 @@ fn add_annotation_constraints(
             (veri_ir::Expr::WidthOf(Box::new(ex)), t)
         }
 
-        annotation_ir::Expr::Eq(x, y, _) => {
+        annotation_ir::Expr::Eq(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -446,7 +446,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::Lte(x, y, _) => {
+        annotation_ir::Expr::Lte(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -462,7 +462,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::Not(x, _) => {
+        annotation_ir::Expr::Not(x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let t = tree.next_type_var;
 
@@ -474,7 +474,7 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::Unary(veri_ir::UnaryOp::Not, Box::new(e1)), t)
         }
-        annotation_ir::Expr::Or(x, y, _) => {
+        annotation_ir::Expr::Or(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -492,7 +492,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::And(x, y, _) => {
+        annotation_ir::Expr::And(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -511,7 +511,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVSgt(x, y, _) => {
+        annotation_ir::Expr::BVSgt(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -527,7 +527,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVSgte(x, y, _) => {
+        annotation_ir::Expr::BVSgte(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -543,7 +543,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVSlt(x, y, _) => {
+        annotation_ir::Expr::BVSlt(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -559,7 +559,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVSlte(x, y, _) => {
+        annotation_ir::Expr::BVSlte(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -575,7 +575,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVUgt(x, y, _) => {
+        annotation_ir::Expr::BVUgt(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -591,7 +591,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVUgte(x, y, _) => {
+        annotation_ir::Expr::BVUgte(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -607,7 +607,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVUlt(x, y, _) => {
+        annotation_ir::Expr::BVUlt(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -623,7 +623,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVUlte(x, y, _) => {
+        annotation_ir::Expr::BVUlte(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -639,7 +639,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVSaddo(x, y, _) => {
+        annotation_ir::Expr::BVSaddo(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -655,7 +655,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVNeg(x, _) => {
+        annotation_ir::Expr::BVNeg(x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
             let t = tree.next_type_var;
@@ -671,7 +671,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVNot(x, _) => {
+        annotation_ir::Expr::BVNot(x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
             let t = tree.next_type_var;
@@ -684,7 +684,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVMul(x, y, _) => {
+        annotation_ir::Expr::BVMul(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -705,7 +705,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVUDiv(x, y, _) => {
+        annotation_ir::Expr::BVUDiv(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -726,7 +726,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVSDiv(x, y, _) => {
+        annotation_ir::Expr::BVSDiv(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -747,7 +747,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVAdd(x, y, _) => {
+        annotation_ir::Expr::BVAdd(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -768,7 +768,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVSub(x, y, _) => {
+        annotation_ir::Expr::BVSub(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -789,7 +789,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVUrem(x, y, _) => {
+        annotation_ir::Expr::BVUrem(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -810,7 +810,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVSrem(x, y, _) => {
+        annotation_ir::Expr::BVSrem(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -832,7 +832,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVAnd(x, y, _) => {
+        annotation_ir::Expr::BVAnd(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -853,7 +853,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVOr(x, y, _) => {
+        annotation_ir::Expr::BVOr(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -874,7 +874,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVXor(x, y, _) => {
+        annotation_ir::Expr::BVXor(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -895,7 +895,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVRotl(x, a, _) => {
+        annotation_ir::Expr::BVRotl(x, a) => {
             let (xe, xt) = add_annotation_constraints(*x, tree, annotation_info);
             let (ae, at) = add_annotation_constraints(*a, tree, annotation_info);
             let t = tree.next_type_var;
@@ -912,7 +912,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVRotr(x, a, _) => {
+        annotation_ir::Expr::BVRotr(x, a) => {
             let (xe, xt) = add_annotation_constraints(*x, tree, annotation_info);
             let (ae, at) = add_annotation_constraints(*a, tree, annotation_info);
             let t = tree.next_type_var;
@@ -929,7 +929,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVShl(x, a, _) => {
+        annotation_ir::Expr::BVShl(x, a) => {
             let (xe, xt) = add_annotation_constraints(*x, tree, annotation_info);
             let (ae, at) = add_annotation_constraints(*a, tree, annotation_info);
             let t = tree.next_type_var;
@@ -947,7 +947,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVShr(x, a, _) => {
+        annotation_ir::Expr::BVShr(x, a) => {
             let (xe, xt) = add_annotation_constraints(*x, tree, annotation_info);
             let (ae, at) = add_annotation_constraints(*a, tree, annotation_info);
             let t = tree.next_type_var;
@@ -965,7 +965,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVAShr(x, a, _) => {
+        annotation_ir::Expr::BVAShr(x, a) => {
             let (xe, xt) = add_annotation_constraints(*x, tree, annotation_info);
             let (ae, at) = add_annotation_constraints(*a, tree, annotation_info);
             let t = tree.next_type_var;
@@ -983,7 +983,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::Lt(x, y, _) => {
+        annotation_ir::Expr::Lt(x, y) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
             let t = tree.next_type_var;
@@ -999,7 +999,7 @@ fn add_annotation_constraints(
             )
         }
 
-        annotation_ir::Expr::BVConvTo(w, x, _) => {
+        annotation_ir::Expr::BVConvTo(w, x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let t = tree.next_type_var;
             tree.next_type_var += 1;
@@ -1018,7 +1018,7 @@ fn add_annotation_constraints(
 
             (veri_ir::Expr::BVConvTo(Box::new(e1)), t)
         }
-        annotation_ir::Expr::BVConvToVarWidth(w, x, _) => {
+        annotation_ir::Expr::BVConvToVarWidth(w, x) => {
             let (we, wt) = add_annotation_constraints(*w, tree, annotation_info);
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let t = tree.next_type_var;
@@ -1050,7 +1050,7 @@ fn add_annotation_constraints(
                 )
             }
         }
-        annotation_ir::Expr::BVSignExtToVarWidth(w, x, _) => {
+        annotation_ir::Expr::BVSignExtToVarWidth(w, x) => {
             let (we, wt) = add_annotation_constraints(*w, tree, annotation_info);
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let t = tree.next_type_var;
@@ -1069,7 +1069,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVZeroExtTo(w, x, _) => {
+        annotation_ir::Expr::BVZeroExtTo(w, x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let t = tree.next_type_var;
             tree.next_type_var += 1;
@@ -1088,7 +1088,7 @@ fn add_annotation_constraints(
 
             (veri_ir::Expr::BVZeroExtTo(width, Box::new(e1)), t)
         }
-        annotation_ir::Expr::BVZeroExtToVarWidth(w, x, _) => {
+        annotation_ir::Expr::BVZeroExtToVarWidth(w, x) => {
             let (we, wt) = add_annotation_constraints(*w, tree, annotation_info);
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let t = tree.next_type_var;
@@ -1107,7 +1107,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVSignExtTo(w, x, _) => {
+        annotation_ir::Expr::BVSignExtTo(w, x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let t = tree.next_type_var;
 
@@ -1127,7 +1127,7 @@ fn add_annotation_constraints(
 
             (veri_ir::Expr::BVSignExtTo(width, Box::new(e1)), t)
         }
-        annotation_ir::Expr::BVExtract(l, r, x, _) => {
+        annotation_ir::Expr::BVExtract(l, r, x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let t = tree.next_type_var;
 
@@ -1142,7 +1142,7 @@ fn add_annotation_constraints(
 
             (veri_ir::Expr::BVExtract(l, r, Box::new(e1)), t)
         }
-        annotation_ir::Expr::BVConcat(xs, _) => {
+        annotation_ir::Expr::BVConcat(xs) => {
             // AVH todo: doesn't sum the various widths, has to be done in the solver
             let t = tree.next_type_var;
             tree.next_type_var += 1;
@@ -1161,7 +1161,7 @@ fn add_annotation_constraints(
 
             (veri_ir::Expr::BVConcat(exprs), t)
         }
-        annotation_ir::Expr::BVIntToBv(w, x, _) => {
+        annotation_ir::Expr::BVIntToBv(w, x) => {
             let (ex, tx) = add_annotation_constraints(*x.clone(), tree, annotation_info);
 
             let t = tree.next_type_var;
@@ -1177,7 +1177,7 @@ fn add_annotation_constraints(
 
             (veri_ir::Expr::BVIntToBV(w, Box::new(ex)), t)
         }
-        annotation_ir::Expr::BVToInt(x, _) => {
+        annotation_ir::Expr::BVToInt(x) => {
             let (ex, tx) = add_annotation_constraints(*x.clone(), tree, annotation_info);
 
             let t = tree.next_type_var;
@@ -1191,7 +1191,7 @@ fn add_annotation_constraints(
 
             (veri_ir::Expr::BVToInt(Box::new(ex)), t)
         }
-        annotation_ir::Expr::Conditional(c, t, e, _) => {
+        annotation_ir::Expr::Conditional(c, t, e) => {
             let (e1, t1) = add_annotation_constraints(*c, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*t, tree, annotation_info);
             let (e3, t3) = add_annotation_constraints(*e, tree, annotation_info);
@@ -1208,7 +1208,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::Switch(c, cases, _) => {
+        annotation_ir::Expr::Switch(c, cases) => {
             let (c_expr, c_t) = add_annotation_constraints(*c, tree, annotation_info);
 
             let t = tree.next_type_var;
@@ -1227,7 +1227,7 @@ fn add_annotation_constraints(
             }
             (veri_ir::Expr::Switch(Box::new(c_expr), case_exprs), t)
         }
-        annotation_ir::Expr::CLZ(x, _) => {
+        annotation_ir::Expr::CLZ(x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
             let t = tree.next_type_var;
@@ -1240,7 +1240,7 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::CLZ(Box::new(e1)), t)
         }
-        annotation_ir::Expr::A64CLZ(ty, x, _) => {
+        annotation_ir::Expr::A64CLZ(ty, x) => {
             let (e0, t0) = add_annotation_constraints(*ty, tree, annotation_info);
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
@@ -1257,7 +1257,7 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::A64CLZ(Box::new(e0), Box::new(e1)), t)
         }
-        annotation_ir::Expr::CLS(x, _) => {
+        annotation_ir::Expr::CLS(x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
             let t = tree.next_type_var;
@@ -1270,7 +1270,7 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::CLS(Box::new(e1)), t)
         }
-        annotation_ir::Expr::A64CLS(ty, x, _) => {
+        annotation_ir::Expr::A64CLS(ty, x) => {
             let (e0, t0) = add_annotation_constraints(*ty, tree, annotation_info);
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
@@ -1287,7 +1287,7 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::A64CLS(Box::new(e0), Box::new(e1)), t)
         }
-        annotation_ir::Expr::Rev(x, _) => {
+        annotation_ir::Expr::Rev(x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
             let t = tree.next_type_var;
@@ -1300,7 +1300,7 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::Rev(Box::new(e1)), t)
         }
-        annotation_ir::Expr::A64Rev(ty, x, _) => {
+        annotation_ir::Expr::A64Rev(ty, x) => {
             let (e0, t0) = add_annotation_constraints(*ty, tree, annotation_info);
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
@@ -1317,7 +1317,7 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (veri_ir::Expr::A64Rev(Box::new(e0), Box::new(e1)), t)
         }
-        annotation_ir::Expr::BVSubs(ty, x, y, _) => {
+        annotation_ir::Expr::BVSubs(ty, x, y) => {
             let (e0, t0) = add_annotation_constraints(*ty, tree, annotation_info);
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
@@ -1344,7 +1344,7 @@ fn add_annotation_constraints(
                 t,
             )
         }
-        annotation_ir::Expr::BVPopcnt(x, _) => {
+        annotation_ir::Expr::BVPopcnt(x) => {
             let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
 
             let t = tree.next_type_var;

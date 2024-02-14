@@ -29,7 +29,7 @@ impl BoundVar {
 
     /// An expression with the bound variable's name
     pub fn as_expr(&self) -> Expr {
-        Expr::Var(self.name.clone(), 0)
+        Expr::Var(self.name.clone())
     }
 }
 
@@ -153,174 +153,111 @@ pub struct FunctionApplication {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
     // Terminal nodes
-    Var(String, u32),
-    Const(Const, u32),
-    True(u32),
-    False(u32),
+    Var(String),
+    Const(Const),
+    True,
+    False,
 
     // Get the width of a bitvector
-    WidthOf(Box<Expr>, u32),
+    WidthOf(Box<Expr>),
 
     // Boolean operations
-    Not(Box<Expr>, u32),
-    And(Box<Expr>, Box<Expr>, u32),
-    Or(Box<Expr>, Box<Expr>, u32),
-    Imp(Box<Expr>, Box<Expr>, u32),
-    Eq(Box<Expr>, Box<Expr>, u32),
-    Lte(Box<Expr>, Box<Expr>, u32),
-    Lt(Box<Expr>, Box<Expr>, u32),
+    Not(Box<Expr>),
+    And(Box<Expr>, Box<Expr>),
+    Or(Box<Expr>, Box<Expr>),
+    Imp(Box<Expr>, Box<Expr>),
+    Eq(Box<Expr>, Box<Expr>),
+    Lte(Box<Expr>, Box<Expr>),
+    Lt(Box<Expr>, Box<Expr>),
 
-    BVSgt(Box<Expr>, Box<Expr>, u32),
-    BVSgte(Box<Expr>, Box<Expr>, u32),
-    BVSlt(Box<Expr>, Box<Expr>, u32),
-    BVSlte(Box<Expr>, Box<Expr>, u32),
-    BVUgt(Box<Expr>, Box<Expr>, u32),
-    BVUgte(Box<Expr>, Box<Expr>, u32),
-    BVUlt(Box<Expr>, Box<Expr>, u32),
-    BVUlte(Box<Expr>, Box<Expr>, u32),
+    BVSgt(Box<Expr>, Box<Expr>),
+    BVSgte(Box<Expr>, Box<Expr>),
+    BVSlt(Box<Expr>, Box<Expr>),
+    BVSlte(Box<Expr>, Box<Expr>),
+    BVUgt(Box<Expr>, Box<Expr>),
+    BVUgte(Box<Expr>, Box<Expr>),
+    BVUlt(Box<Expr>, Box<Expr>),
+    BVUlte(Box<Expr>, Box<Expr>),
 
-    BVSaddo(Box<Expr>, Box<Expr>, u32),
+    BVSaddo(Box<Expr>, Box<Expr>),
 
     // Bitvector operations
     //      Note: these follow the naming conventions of the SMT theory of bitvectors:
     //      https://SMT-LIB.cs.uiowa.edu/version1/logics/QF_BV.smt
     // Unary operators
-    BVNeg(Box<Expr>, u32),
-    BVNot(Box<Expr>, u32),
-    CLZ(Box<Expr>, u32),
-    A64CLZ(Box<Expr>, Box<Expr>, u32),
-    CLS(Box<Expr>, u32),
-    A64CLS(Box<Expr>, Box<Expr>, u32),
-    Rev(Box<Expr>, u32),
-    A64Rev(Box<Expr>, Box<Expr>, u32),
-    BVPopcnt(Box<Expr>, u32),
+    BVNeg(Box<Expr>),
+    BVNot(Box<Expr>),
+    CLZ(Box<Expr>),
+    A64CLZ(Box<Expr>, Box<Expr>),
+    CLS(Box<Expr>),
+    A64CLS(Box<Expr>, Box<Expr>),
+    Rev(Box<Expr>),
+    A64Rev(Box<Expr>, Box<Expr>),
+    BVPopcnt(Box<Expr>),
 
     // Binary operators
-    BVMul(Box<Expr>, Box<Expr>, u32),
-    BVUDiv(Box<Expr>, Box<Expr>, u32),
-    BVSDiv(Box<Expr>, Box<Expr>, u32),
-    BVAdd(Box<Expr>, Box<Expr>, u32),
-    BVSub(Box<Expr>, Box<Expr>, u32),
-    BVUrem(Box<Expr>, Box<Expr>, u32),
-    BVSrem(Box<Expr>, Box<Expr>, u32),
-    BVAnd(Box<Expr>, Box<Expr>, u32),
-    BVOr(Box<Expr>, Box<Expr>, u32),
-    BVXor(Box<Expr>, Box<Expr>, u32),
-    BVRotl(Box<Expr>, Box<Expr>, u32),
-    BVRotr(Box<Expr>, Box<Expr>, u32),
-    BVShl(Box<Expr>, Box<Expr>, u32),
-    BVShr(Box<Expr>, Box<Expr>, u32),
-    BVAShr(Box<Expr>, Box<Expr>, u32),
+    BVMul(Box<Expr>, Box<Expr>),
+    BVUDiv(Box<Expr>, Box<Expr>),
+    BVSDiv(Box<Expr>, Box<Expr>),
+    BVAdd(Box<Expr>, Box<Expr>),
+    BVSub(Box<Expr>, Box<Expr>),
+    BVUrem(Box<Expr>, Box<Expr>),
+    BVSrem(Box<Expr>, Box<Expr>),
+    BVAnd(Box<Expr>, Box<Expr>),
+    BVOr(Box<Expr>, Box<Expr>),
+    BVXor(Box<Expr>, Box<Expr>),
+    BVRotl(Box<Expr>, Box<Expr>),
+    BVRotr(Box<Expr>, Box<Expr>),
+    BVShl(Box<Expr>, Box<Expr>),
+    BVShr(Box<Expr>, Box<Expr>),
+    BVAShr(Box<Expr>, Box<Expr>),
 
     // Includes type
-    BVSubs(Box<Expr>, Box<Expr>, Box<Expr>, u32),
+    BVSubs(Box<Expr>, Box<Expr>, Box<Expr>),
 
     // Conversions
     // Zero extend, static and dynamic width
-    BVZeroExtTo(Box<Width>, Box<Expr>, u32),
-    BVZeroExtToVarWidth(Box<Expr>, Box<Expr>, u32),
+    BVZeroExtTo(Box<Width>, Box<Expr>),
+    BVZeroExtToVarWidth(Box<Expr>, Box<Expr>),
 
     // Sign extend, static and dynamic width
-    BVSignExtTo(Box<Width>, Box<Expr>, u32),
-    BVSignExtToVarWidth(Box<Expr>, Box<Expr>, u32),
+    BVSignExtTo(Box<Width>, Box<Expr>),
+    BVSignExtToVarWidth(Box<Expr>, Box<Expr>),
 
     // Extract specified bits
-    BVExtract(usize, usize, Box<Expr>, u32),
+    BVExtract(usize, usize, Box<Expr>),
 
     // Concat two bitvectors
-    BVConcat(Vec<Expr>, u32),
+    BVConcat(Vec<Expr>),
 
     // Convert integer to bitvector
-    BVIntToBv(usize, Box<Expr>, u32),
+    BVIntToBv(usize, Box<Expr>),
 
     // Convert bitvector to integer
-    BVToInt(Box<Expr>, u32),
+    BVToInt(Box<Expr>),
 
     // Conversion to wider/narrower bits, without an explicit extend
-    BVConvTo(Box<Width>, Box<Expr>, u32),
+    BVConvTo(Box<Width>, Box<Expr>),
     // Allow the destination width to be symbolic.
-    BVConvToVarWidth(Box<Expr>, Box<Expr>, u32),
+    BVConvToVarWidth(Box<Expr>, Box<Expr>),
 
     // Conditional if-then-else
-    Conditional(Box<Expr>, Box<Expr>, Box<Expr>, u32),
+    Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
 
     // Switch
-    Switch(Box<Expr>, Vec<(Expr, Expr)>, u32),
+    Switch(Box<Expr>, Vec<(Expr, Expr)>),
 }
 
 impl Expr {
     pub fn var(s: &str) -> Expr {
-        Expr::Var(s.to_string(), 0)
+        Expr::Var(s.to_string())
     }
 
-    pub fn unary<F: Fn(Box<Expr>, u32) -> Expr>(f: F, x: Expr) -> Expr {
-        f(Box::new(x), 0)
+    pub fn unary<F: Fn(Box<Expr>) -> Expr>(f: F, x: Expr) -> Expr {
+        f(Box::new(x))
     }
 
-    pub fn binary<F: Fn(Box<Expr>, Box<Expr>, u32) -> Expr>(f: F, x: Expr, y: Expr) -> Expr {
-        f(Box::new(x), Box::new(y), 0)
-    }
-
-    pub fn get_type_var(x: &Expr) -> u32 {
-        match x {
-            Expr::True(t)
-            | Expr::False(t)
-            | Expr::Var(_, t)
-            | Expr::Const(_, t)
-            | Expr::WidthOf(_, t)
-            | Expr::Not(_, t)
-            | Expr::BVNeg(_, t)
-            | Expr::BVNot(_, t)
-            | Expr::CLZ(_, t)
-            | Expr::A64CLZ(_, _, t)
-            | Expr::CLS(_, t)
-            | Expr::A64CLS(_, _, t)
-            | Expr::Rev(_, t)
-            | Expr::A64Rev(_, _, t)
-            | Expr::And(_, _, t)
-            | Expr::Or(_, _, t)
-            | Expr::Imp(_, _, t)
-            | Expr::Eq(_, _, t)
-            | Expr::Lte(_, _, t)
-            | Expr::BVSgt(_, _, t)
-            | Expr::BVSgte(_, _, t)
-            | Expr::BVSlt(_, _, t)
-            | Expr::BVSlte(_, _, t)
-            | Expr::BVUgt(_, _, t)
-            | Expr::BVUgte(_, _, t)
-            | Expr::BVUlt(_, _, t)
-            | Expr::BVUlte(_, _, t)
-            | Expr::BVMul(_, _, t)
-            | Expr::BVUDiv(_, _, t)
-            | Expr::BVSDiv(_, _, t)
-            | Expr::BVAdd(_, _, t)
-            | Expr::BVSub(_, _, t)
-            | Expr::BVUrem(_, _, t)
-            | Expr::BVSrem(_, _, t)
-            | Expr::BVAnd(_, _, t)
-            | Expr::BVOr(_, _, t)
-            | Expr::BVXor(_, _, t)
-            | Expr::BVRotl(_, _, t)
-            | Expr::BVRotr(_, _, t)
-            | Expr::BVShl(_, _, t)
-            | Expr::BVShr(_, _, t)
-            | Expr::BVAShr(_, _, t)
-            | Expr::BVSaddo(_, _, t)
-            | Expr::Lt(_, _, t)
-            | Expr::BVZeroExtTo(_, _, t)
-            | Expr::BVZeroExtToVarWidth(_, _, t)
-            | Expr::BVSignExtTo(_, _, t)
-            | Expr::BVSignExtToVarWidth(_, _, t)
-            | Expr::BVIntToBv(_, _, t)
-            | Expr::BVToInt(_, t)
-            | Expr::BVConvTo(_, _, t)
-            | Expr::BVConvToVarWidth(_, _, t)
-            | Expr::BVExtract(_, _, _, t)
-            | Expr::BVConcat(_, t)
-            | Expr::BVSubs(_, _, _, t)
-            | Expr::BVPopcnt(_, t)
-            | Expr::Conditional(_, _, _, t)
-            | Expr::Switch(_, _, t) => *t,
-        }
+    pub fn binary<F: Fn(Box<Expr>, Box<Expr>) -> Expr>(f: F, x: Expr, y: Expr) -> Expr {
+        f(Box::new(x), Box::new(y))
     }
 }

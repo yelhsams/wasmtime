@@ -67,7 +67,7 @@ fn spec_to_usize(s: &SpecExpr) -> Option<usize> {
 }
 
 fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv) -> Expr {
-    fn unop<F: Fn(Box<Expr>, u32) -> Expr>(
+    fn unop<F: Fn(Box<Expr>) -> Expr>(
         u: F,
         args: &Vec<SpecExpr>,
         pos: &Pos,
@@ -79,9 +79,9 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
             "Unexpected number of args for unary operator {:?}",
             pos
         );
-        return u(Box::new(spec_to_expr(&args[0], env)), 0);
+        return u(Box::new(spec_to_expr(&args[0], env)));
     }
-    fn binop<F: Fn(Box<Expr>, Box<Expr>, u32) -> Expr>(
+    fn binop<F: Fn(Box<Expr>, Box<Expr>) -> Expr>(
         b: F,
         args: &Vec<SpecExpr>,
         _pos: &Pos,
@@ -96,7 +96,6 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         b(
             Box::new(spec_to_expr(&args[0], env)),
             Box::new(spec_to_expr(&args[1], env)),
-            0,
         )
     }
 
@@ -123,71 +122,69 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
 
     match s {
         // Unary
-        SpecOp::Not => unop(|x, i| Expr::Not(x, i), args, pos, env),
-        SpecOp::BVNot => unop(|x, i| Expr::BVNot(x, i), args, pos, env),
-        SpecOp::BVNeg => unop(|x, i| Expr::BVNeg(x, i), args, pos, env),
-        SpecOp::Rev => unop(|x, i| Expr::Rev(x, i), args, pos, env),
-        SpecOp::Clz => unop(|x, i| Expr::CLZ(x, i), args, pos, env),
-        SpecOp::Cls => unop(|x, i| Expr::CLS(x, i), args, pos, env),
-        SpecOp::Popcnt => unop(|x, i| Expr::BVPopcnt(x, i), args, pos, env),
-        SpecOp::BV2Int => unop(|x, i| Expr::BVToInt(x, i), args, pos, env),
+        SpecOp::Not => unop(|x| Expr::Not(x), args, pos, env),
+        SpecOp::BVNot => unop(|x| Expr::BVNot(x), args, pos, env),
+        SpecOp::BVNeg => unop(|x| Expr::BVNeg(x), args, pos, env),
+        SpecOp::Rev => unop(|x| Expr::Rev(x), args, pos, env),
+        SpecOp::Clz => unop(|x| Expr::CLZ(x), args, pos, env),
+        SpecOp::Cls => unop(|x| Expr::CLS(x), args, pos, env),
+        SpecOp::Popcnt => unop(|x| Expr::BVPopcnt(x), args, pos, env),
+        SpecOp::BV2Int => unop(|x| Expr::BVToInt(x), args, pos, env),
 
         // Variadic binops
-        SpecOp::And => variadic_binop(|x, y, i| Expr::And(x, y, i), args, pos, env),
-        SpecOp::Or => variadic_binop(|x, y, i| Expr::Or(x, y, i), args, pos, env),
+        SpecOp::And => variadic_binop(|x, y, i| Expr::And(x, y), args, pos, env),
+        SpecOp::Or => variadic_binop(|x, y, i| Expr::Or(x, y), args, pos, env),
 
         // Binary
-        SpecOp::Eq => binop(|x, y, i| Expr::Eq(x, y, i), args, pos, env),
-        SpecOp::Lt => binop(|x, y, i| Expr::Lt(x, y, i), args, pos, env),
-        SpecOp::Lte => binop(|x, y, i| Expr::Lte(x, y, i), args, pos, env),
-        SpecOp::Gt => binop(|x, y, i| Expr::Lt(y, x, i), args, pos, env),
-        SpecOp::Gte => binop(|x, y, i| Expr::Lte(y, x, i), args, pos, env),
-        SpecOp::BVAnd => binop(|x, y, i| Expr::BVAnd(x, y, i), args, pos, env),
-        SpecOp::BVOr => binop(|x, y, i| Expr::BVOr(x, y, i), args, pos, env),
-        SpecOp::BVXor => binop(|x, y, i| Expr::BVXor(x, y, i), args, pos, env),
-        SpecOp::BVAdd => binop(|x, y, i| Expr::BVAdd(x, y, i), args, pos, env),
-        SpecOp::BVSub => binop(|x, y, i| Expr::BVSub(x, y, i), args, pos, env),
-        SpecOp::BVMul => binop(|x, y, i| Expr::BVMul(x, y, i), args, pos, env),
-        SpecOp::BVUdiv => binop(|x, y, i| Expr::BVUDiv(x, y, i), args, pos, env),
-        SpecOp::BVUrem => binop(|x, y, i| Expr::BVUrem(x, y, i), args, pos, env),
-        SpecOp::BVSdiv => binop(|x, y, i| Expr::BVSDiv(x, y, i), args, pos, env),
-        SpecOp::BVSrem => binop(|x, y, i| Expr::BVSrem(x, y, i), args, pos, env),
-        SpecOp::BVShl => binop(|x, y, i| Expr::BVShl(x, y, i), args, pos, env),
-        SpecOp::BVLshr => binop(|x, y, i| Expr::BVShr(x, y, i), args, pos, env),
-        SpecOp::BVAshr => binop(|x, y, i| Expr::BVAShr(x, y, i), args, pos, env),
-        SpecOp::BVSaddo => binop(|x, y, i| Expr::BVSaddo(x, y, i), args, pos, env),
-        SpecOp::BVUle => binop(|x, y, i| Expr::BVUlte(x, y, i), args, pos, env),
-        SpecOp::BVUlt => binop(|x, y, i| Expr::BVUlt(x, y, i), args, pos, env),
-        SpecOp::BVUgt => binop(|x, y, i| Expr::BVUgt(x, y, i), args, pos, env),
-        SpecOp::BVUge => binop(|x, y, i| Expr::BVUgte(x, y, i), args, pos, env),
-        SpecOp::BVSlt => binop(|x, y, i| Expr::BVSlt(x, y, i), args, pos, env),
-        SpecOp::BVSle => binop(|x, y, i| Expr::BVSlte(x, y, i), args, pos, env),
-        SpecOp::BVSgt => binop(|x, y, i| Expr::BVSgt(x, y, i), args, pos, env),
-        SpecOp::BVSge => binop(|x, y, i| Expr::BVSgte(x, y, i), args, pos, env),
-        SpecOp::Rotr => binop(|x, y, i| Expr::BVRotr(x, y, i), args, pos, env),
-        SpecOp::Rotl => binop(|x, y, i| Expr::BVRotl(x, y, i), args, pos, env),
+        SpecOp::Eq => binop(|x, y| Expr::Eq(x, y), args, pos, env),
+        SpecOp::Lt => binop(|x, y| Expr::Lt(x, y), args, pos, env),
+        SpecOp::Lte => binop(|x, y| Expr::Lte(x, y), args, pos, env),
+        SpecOp::Gt => binop(|x, y| Expr::Lt(y, x), args, pos, env),
+        SpecOp::Gte => binop(|x, y| Expr::Lte(y, x), args, pos, env),
+        SpecOp::BVAnd => binop(|x, y| Expr::BVAnd(x, y), args, pos, env),
+        SpecOp::BVOr => binop(|x, y| Expr::BVOr(x, y), args, pos, env),
+        SpecOp::BVXor => binop(|x, y| Expr::BVXor(x, y), args, pos, env),
+        SpecOp::BVAdd => binop(|x, y| Expr::BVAdd(x, y), args, pos, env),
+        SpecOp::BVSub => binop(|x, y| Expr::BVSub(x, y), args, pos, env),
+        SpecOp::BVMul => binop(|x, y| Expr::BVMul(x, y), args, pos, env),
+        SpecOp::BVUdiv => binop(|x, y| Expr::BVUDiv(x, y), args, pos, env),
+        SpecOp::BVUrem => binop(|x, y| Expr::BVUrem(x, y), args, pos, env),
+        SpecOp::BVSdiv => binop(|x, y| Expr::BVSDiv(x, y), args, pos, env),
+        SpecOp::BVSrem => binop(|x, y| Expr::BVSrem(x, y), args, pos, env),
+        SpecOp::BVShl => binop(|x, y| Expr::BVShl(x, y), args, pos, env),
+        SpecOp::BVLshr => binop(|x, y| Expr::BVShr(x, y), args, pos, env),
+        SpecOp::BVAshr => binop(|x, y| Expr::BVAShr(x, y), args, pos, env),
+        SpecOp::BVSaddo => binop(|x, y| Expr::BVSaddo(x, y), args, pos, env),
+        SpecOp::BVUle => binop(|x, y| Expr::BVUlte(x, y), args, pos, env),
+        SpecOp::BVUlt => binop(|x, y| Expr::BVUlt(x, y), args, pos, env),
+        SpecOp::BVUgt => binop(|x, y| Expr::BVUgt(x, y), args, pos, env),
+        SpecOp::BVUge => binop(|x, y| Expr::BVUgte(x, y), args, pos, env),
+        SpecOp::BVSlt => binop(|x, y| Expr::BVSlt(x, y), args, pos, env),
+        SpecOp::BVSle => binop(|x, y| Expr::BVSlte(x, y), args, pos, env),
+        SpecOp::BVSgt => binop(|x, y| Expr::BVSgt(x, y), args, pos, env),
+        SpecOp::BVSge => binop(|x, y| Expr::BVSgte(x, y), args, pos, env),
+        SpecOp::Rotr => binop(|x, y| Expr::BVRotr(x, y), args, pos, env),
+        SpecOp::Rotl => binop(|x, y| Expr::BVRotl(x, y), args, pos, env),
         SpecOp::ZeroExt => match spec_to_usize(&args[0]) {
             Some(i) => Expr::BVZeroExtTo(
                 Box::new(Width::Const(i)),
                 Box::new(spec_to_expr(&args[1], env)),
-                0,
             ),
-            None => binop(|x, y, i| Expr::BVZeroExtToVarWidth(x, y, i), args, pos, env),
+            None => binop(|x, y| Expr::BVZeroExtToVarWidth(x, y), args, pos, env),
         },
         SpecOp::SignExt => match spec_to_usize(&args[0]) {
             Some(i) => Expr::BVSignExtTo(
                 Box::new(Width::Const(i)),
                 Box::new(spec_to_expr(&args[1], env)),
-                0,
             ),
-            None => binop(|x, y, i| Expr::BVSignExtToVarWidth(x, y, i), args, pos, env),
+            None => binop(|x, y| Expr::BVSignExtToVarWidth(x, y), args, pos, env),
         },
-        SpecOp::ConvTo => binop(|x, y, i| Expr::BVConvToVarWidth(x, y, i), args, pos, env),
+        SpecOp::ConvTo => binop(|x, y| Expr::BVConvToVarWidth(x, y), args, pos, env),
 
         // AVH TODO
         SpecOp::Concat => {
             let cases: Vec<Expr> = args.iter().map(|a| spec_to_expr(a, env)).collect();
-            Expr::BVConcat(cases, 0)
+            Expr::BVConcat(cases)
         }
         SpecOp::Extract => {
             assert_eq!(
@@ -200,7 +197,6 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
                 spec_to_usize(&args[0]).unwrap(),
                 spec_to_usize(&args[1]).unwrap(),
                 Box::new(spec_to_expr(&args[2], env)),
-                0,
             )
         }
         SpecOp::Int2BV => {
@@ -213,7 +209,6 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
             Expr::BVIntToBv(
                 spec_to_usize(&args[0]).unwrap(),
                 Box::new(spec_to_expr(&args[1], env)),
-                0,
             )
         }
         SpecOp::Subs => {
@@ -227,10 +222,9 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
                 Box::new(spec_to_expr(&args[0], env)),
                 Box::new(spec_to_expr(&args[1], env)),
                 Box::new(spec_to_expr(&args[2], env)),
-                0,
             )
         }
-        SpecOp::WidthOf => unop(|x, i| Expr::WidthOf(x, i), args, pos, env),
+        SpecOp::WidthOf => unop(|x| Expr::WidthOf(x), args, pos, env),
         SpecOp::If => {
             assert_eq!(
                 args.len(),
@@ -242,7 +236,6 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
                 Box::new(spec_to_expr(&args[0], env)),
                 Box::new(spec_to_expr(&args[1], env)),
                 Box::new(spec_to_expr(&args[2], env)),
-                0,
             )
         }
         SpecOp::Switch => {
@@ -263,38 +256,29 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
                     _ => unreachable!(),
                 })
                 .collect();
-            Expr::Switch(Box::new(swith_on), arms, 0)
+            Expr::Switch(Box::new(swith_on), arms)
         }
     }
 }
 
 fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
     match s {
-        SpecExpr::ConstInt { val, pos: _ } => Expr::Const(
-            Const {
-                ty: Type::Int,
-                value: *val,
-                width: 0,
-            },
-            0,
-        ),
-        SpecExpr::ConstBitVec { val, width, pos: _ } => Expr::Const(
-            Const {
-                ty: Type::BitVectorWithWidth(*width as usize),
-                value: *val,
-                width: (*width as usize),
-            },
-            0,
-        ),
-        SpecExpr::ConstBool { val, pos: _ } => Expr::Const(
-            Const {
-                ty: Type::Bool,
-                value: *val as i128,
-                width: 0,
-            },
-            0,
-        ),
-        SpecExpr::Var { var, pos: _ } => Expr::Var(var.0.clone(), 0),
+        SpecExpr::ConstInt { val, pos: _ } => Expr::Const(Const {
+            ty: Type::Int,
+            value: *val,
+            width: 0,
+        }),
+        SpecExpr::ConstBitVec { val, width, pos: _ } => Expr::Const(Const {
+            ty: Type::BitVectorWithWidth(*width as usize),
+            value: *val,
+            width: (*width as usize),
+        }),
+        SpecExpr::ConstBool { val, pos: _ } => Expr::Const(Const {
+            ty: Type::Bool,
+            value: *val as i128,
+            width: 0,
+        }),
+        SpecExpr::Var { var, pos: _ } => Expr::Var(var.0.clone()),
         SpecExpr::Op { op, args, pos } => spec_op_to_expr(op, args, pos, env),
         SpecExpr::Pair { l, r } => {
             unreachable!(
@@ -359,7 +343,7 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
                         let term_id = termenv.get_term_by_name(typeenv, &ident).unwrap();
                         let val = spec_to_expr(e, &env);
                         let ty = match val {
-                            Expr::Const(Const { ref ty, .. }, _) => ty,
+                            Expr::Const(Const { ref ty, .. }) => ty,
                             _ => unreachable!(),
                         };
                         env.enums.insert(ident.0.clone(), val.clone());
@@ -374,9 +358,8 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
                         let annotation = TermAnnotation {
                             sig,
                             assumptions: vec![Box::new(Expr::Eq(
-                                Box::new(Expr::Var(RESULT.to_string(), 0)),
+                                Box::new(Expr::Var(RESULT.to_string())),
                                 Box::new(val),
-                                0,
                             ))],
                             assertions: vec![],
                         };
