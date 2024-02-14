@@ -23,7 +23,7 @@ use encoded_ops::clz;
 use encoded_ops::rev;
 use encoded_ops::subs;
 
-use crate::REG_WIDTH;
+use crate::MAX_WIDTH;
 
 pub struct SolverCtx {
     smt: easy_smt::Context,
@@ -1678,7 +1678,7 @@ pub fn run_solver(
         dynwidths: true,
         onlywidths: false,
         tyctx: rule_sem.tyctx.clone(),
-        bitwidth: REG_WIDTH,
+        bitwidth: MAX_WIDTH,
         var_map: HashMap::new(),
         width_vars: HashMap::new(),
         width_assumptions: vec![],
@@ -1882,7 +1882,7 @@ pub fn run_solver_with_static_widths(
         dynwidths: false,
         onlywidths: false,
         tyctx: tyctx.clone(),
-        bitwidth: REG_WIDTH,
+        bitwidth: MAX_WIDTH,
         var_map: HashMap::new(),
         width_vars: HashMap::new(),
         width_assumptions: vec![],
@@ -1918,13 +1918,13 @@ pub fn run_solver_with_static_widths(
         (None, None) => {
             println!(
                 "Width of relevant bits of LHS and RHS unknown, using full register bitwidth: {}",
-                REG_WIDTH
+                MAX_WIDTH
             );
-            REG_WIDTH
+            MAX_WIDTH
         }
     };
 
-    let (lhs_care_bits, rhs_care_bits) = if width == REG_WIDTH {
+    let (lhs_care_bits, rhs_care_bits) = if width == MAX_WIDTH {
         (lhs, rhs)
     } else {
         (

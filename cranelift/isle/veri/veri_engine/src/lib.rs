@@ -15,6 +15,9 @@ pub mod verify;
 
 pub const REG_WIDTH: usize = 64;
 
+// Use a distinct with as the maximum width any value should have within type inference
+pub const MAX_WIDTH: usize = 4*REG_WIDTH;
+
 pub const FLAGS_WIDTH: usize = 4;
 
 pub const WIDTHS: [usize; 4] = [8, 16, 32, 64];
