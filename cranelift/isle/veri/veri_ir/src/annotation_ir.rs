@@ -73,13 +73,6 @@ impl TermAnnotation {
     }
 }
 
-/// Function type with argument and return types.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct FunctionType {
-    pub args: Vec<Type>,
-    pub ret: Box<Type>,
-}
-
 /// Higher-level type, not including bitwidths.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Type {
@@ -129,24 +122,6 @@ pub struct Const {
 pub enum Width {
     Const(usize),
     RegWidth,
-}
-
-/// A bound function with named arguments, the VIR type signature, and the body
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Function {
-    pub name: String,
-    pub ty: Type,
-    pub args: Vec<BoundVar>,
-    pub body: Box<Expr>,
-}
-
-/// Application of a function expression to arguments
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FunctionApplication {
-    pub func: Box<Expr>,
-    // Note: extra Box for now for ease of parsing
-    #[allow(clippy::vec_box)]
-    pub args: Vec<Box<Expr>>,
 }
 
 /// Typed expressions (u32 is the type var)

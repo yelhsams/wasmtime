@@ -31,52 +31,6 @@ pub struct ConcreteTest {
     pub output: ConcreteInput,
 }
 
-/// Verification IR annotations for an ISLE term consist of the function
-/// signature and a list of assertions.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VIRTermAnnotation {
-    pub sig: VIRTermSignature,
-    pub assertions: Vec<Expr>,
-}
-
-impl VIRTermAnnotation {
-    /// New annotation, ensuring that each assertions is a bool.
-    pub fn new(sig: VIRTermSignature, assertions: Vec<Expr>) -> Self {
-        // assert!(assertions.iter().all(|a| a.ty().is_bool()));
-        VIRTermAnnotation { sig, assertions }
-    }
-
-    pub fn func(&self) -> &VIRTermSignature {
-        &self.sig
-    }
-
-    pub fn assertions(&self) -> &Vec<Expr> {
-        &self.assertions
-    }
-}
-/// A function signature annotation, including the bound variable names for all
-/// arguments and the return value.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VIRTermSignature {
-    pub args: Vec<BoundVar>,
-    pub ret: BoundVar,
-}
-/// A bound function with named arguments, the VIR type signature, and the body
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Function {
-    pub name: String,
-    pub ty: Type,
-    pub args: Vec<BoundVar>,
-    pub body: Box<Expr>,
-}
-
-/// Application of a function expression to arguments
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FunctionApplication {
-    pub ty: Type,
-    pub func: Box<Expr>,
-    pub args: Vec<Expr>,
-}
 /// A bound variable, including the VIR type
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BoundVar {
@@ -233,12 +187,6 @@ pub enum Expr {
     BVConvToVarWidth(Box<Expr>, Box<Expr>),
 
     WidthOf(Box<Expr>),
-}
-
-impl BoundVar {
-    pub fn as_expr(&self) -> Expr {
-        Expr::Terminal(Terminal::Var(self.name.clone()))
-    }
 }
 
 /// To-be-flushed-out verification counterexample for failures
