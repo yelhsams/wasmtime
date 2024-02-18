@@ -457,10 +457,6 @@ impl SolverCtx {
         narrow_decl: SExpr,
         name: Option<String>,
     ) -> SExpr {
-        println!(
-            "widen: tyvar={tyvar:?} narrow_width={narrow_width:?} name={name:?} bitwidth={}",
-            self.bitwidth
-        );
         let width = self.bitwidth.checked_sub(narrow_width).unwrap();
         if width > 0 {
             let mut narrow_name = format!("narrow__{}", tyvar);
