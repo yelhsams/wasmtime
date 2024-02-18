@@ -1181,7 +1181,7 @@ impl SolverCtx {
                     Some(8) => {
                         let p = popcnt(self, 8, ex, tyvar);
                         if self.dynwidths {
-                            self.zero_extend(56, p)
+                            self.zero_extend(self.bitwidth - 8, p)
                         } else {
                             p
                         }
@@ -1189,7 +1189,7 @@ impl SolverCtx {
                     Some(16) => {
                         let p = popcnt(self, 16, ex, tyvar);
                         if self.dynwidths {
-                            self.zero_extend(56, p)
+                            self.zero_extend(self.bitwidth - 8, p)
                         } else {
                             self.zero_extend(8, p)
                         }
@@ -1197,14 +1197,18 @@ impl SolverCtx {
                     Some(32) => {
                         let p = popcnt(self, 32, ex, tyvar);
                         if self.dynwidths {
-                            self.zero_extend(56, p)
+                            self.zero_extend(self.bitwidth - 8, p)
                         } else {
                             self.zero_extend(24, p)
                         }
                     }
                     Some(64) => {
                         let p = popcnt(self, 64, ex, tyvar);
-                        self.zero_extend(56, p)
+                        if self.dynwidths {
+                            self.zero_extend(self.bitwidth - 8, p)
+                        } else {
+                            self.zero_extend(56, p)
+                        }
                     }
                     Some(w) => unreachable!("Unexpected popcnt width {}", w),
                     None => unreachable!("Need static popcnt width"),
