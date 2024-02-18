@@ -2032,9 +2032,14 @@
                     (bvshl a (bvand (bvsub (int2bv 64 64) #x0000000000000001) b)))))))
     (require
       (or (= op (ALUOp.Lsr)) (= op (ALUOp.Asr)) (= op (ALUOp.Lsl)))
-      (or (= t 8) (= t 16) (= t 32) (= t 64))))
+      ;(or (= t 8) (= t 16) (= t 32) (= t 64)))
+      (or (= t 64)))
+      )
 (decl alu_rrr (ALUOp Type Reg Reg) Reg)
-(rule (alu_rrr op ty src1 src2)
+(instantiate alu_rrr
+    ((args (bv 8) Int (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
+)
+(rule alu_rrr_emit (alu_rrr op ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRR op (operand_size ty) dst src1 src2))))
         dst))

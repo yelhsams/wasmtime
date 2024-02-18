@@ -335,7 +335,7 @@
 (decl emit (MInst) Unit)
 (extern constructor emit emit)
 ; TODO(mbm): what is the right spec for emit?
-(spec (emit inst) (provide true))
+(spec (emit inst) (provide (= result #b1)))
 
 ;; Sink an instruction.
 ;;
