@@ -99,7 +99,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         )
     }
 
-    fn variadic_binop<F: Fn(Box<Expr>, Box<Expr>, u32) -> Expr>(
+    fn variadic_binop<F: Fn(Box<Expr>, Box<Expr>) -> Expr>(
         b: F,
         args: &Vec<SpecExpr>,
         pos: &Pos,
@@ -117,7 +117,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         expr_args
             .iter()
             .rev()
-            .fold(last, |acc, a| b(Box::new(a.clone()), Box::new(acc), 0))
+            .fold(last, |acc, a| b(Box::new(a.clone()), Box::new(acc)))
     }
 
     match s {
@@ -132,8 +132,8 @@ fn spec_op_to_expr(s: &SpecOp, args: &Vec<SpecExpr>, pos: &Pos, env: &ParsingEnv
         SpecOp::BV2Int => unop(|x| Expr::BVToInt(x), args, pos, env),
 
         // Variadic binops
-        SpecOp::And => variadic_binop(|x, y, i| Expr::And(x, y), args, pos, env),
-        SpecOp::Or => variadic_binop(|x, y, i| Expr::Or(x, y), args, pos, env),
+        SpecOp::And => variadic_binop(|x, y| Expr::And(x, y), args, pos, env),
+        SpecOp::Or => variadic_binop(|x, y| Expr::Or(x, y), args, pos, env),
 
         // Binary
         SpecOp::Eq => binop(|x, y| Expr::Eq(x, y), args, pos, env),
