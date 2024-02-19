@@ -19,6 +19,7 @@ use isla_lib::simplify::{self, WriteOpts};
 use isla_lib::smt::smtlib;
 use isla_lib::smt::{self, Checkpoint, Event, Solver, Sym};
 use isla_lib::zencode;
+use itertools::Itertools;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::prelude::*;
@@ -102,6 +103,12 @@ fn define() -> Vec<SpecConfig> {
         //ALUOp::SbcS,
     ];
 
+    // OperandSize
+    let sizes = vec![
+        OperandSize::Size32,
+        OperandSize::Size64,
+    ];
+
     // AluRRR
     let alu_rrr = SpecConfig {
         // Spec signature.
@@ -113,10 +120,11 @@ fn define() -> Vec<SpecConfig> {
         cases: alu_ops
             .iter()
             .copied()
-            .map(|alu_op| InstConfig {
+            .cartesian_product(sizes)
+            .map(|(alu_op, size)| InstConfig {
                 inst: Inst::AluRRR {
                     alu_op,
-                    size: OperandSize::Size64,
+                    size,
                     rd: writable_xreg(4),
                     rn: xreg(5),
                     rm: xreg(6),
@@ -130,7 +138,7 @@ fn define() -> Vec<SpecConfig> {
                     ),
                     spec_eq(
                         spec_var("size".to_string()),
-                        spec_enum("OperandSize".to_string(), "Size64".to_string()),
+                        spec_enum("OperandSize".to_string(), format!("{size:?}")),
                     ),
                 ],
 
