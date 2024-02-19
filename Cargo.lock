@@ -1847,6 +1847,7 @@ dependencies = [
 [[package]]
 name = "isla"
 version = "0.2.0"
+source = "git+https://github.com/rems-project/isla.git?rev=2a4bd429b56634db52d59707b83090a535b5c4bc#2a4bd429b56634db52d59707b83090a535b5c4bc"
 dependencies = [
  "bincode",
  "crossbeam",
@@ -1866,6 +1867,7 @@ dependencies = [
 [[package]]
 name = "isla-axiomatic"
 version = "0.2.0"
+source = "git+https://github.com/rems-project/isla.git?rev=2a4bd429b56634db52d59707b83090a535b5c4bc#2a4bd429b56634db52d59707b83090a535b5c4bc"
 dependencies = [
  "crossbeam",
  "goblin",
@@ -1884,6 +1886,7 @@ dependencies = [
 [[package]]
 name = "isla-cat"
 version = "0.2.0"
+source = "git+https://github.com/rems-project/isla.git?rev=2a4bd429b56634db52d59707b83090a535b5c4bc#2a4bd429b56634db52d59707b83090a535b5c4bc"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
@@ -1894,6 +1897,7 @@ dependencies = [
 [[package]]
 name = "isla-elf"
 version = "0.2.0"
+source = "git+https://github.com/rems-project/isla.git?rev=2a4bd429b56634db52d59707b83090a535b5c4bc#2a4bd429b56634db52d59707b83090a535b5c4bc"
 dependencies = [
  "gimli 0.26.2",
  "goblin",
@@ -1904,6 +1908,7 @@ dependencies = [
 [[package]]
 name = "isla-lib"
 version = "0.2.0"
+source = "git+https://github.com/rems-project/isla.git?rev=2a4bd429b56634db52d59707b83090a535b5c4bc#2a4bd429b56634db52d59707b83090a535b5c4bc"
 dependencies = [
  "ahash 0.7.7",
  "bincode",
@@ -1925,6 +1930,7 @@ dependencies = [
 [[package]]
 name = "isla-mml"
 version = "0.2.0"
+source = "git+https://github.com/rems-project/isla.git?rev=2a4bd429b56634db52d59707b83090a535b5c4bc#2a4bd429b56634db52d59707b83090a535b5c4bc"
 dependencies = [
  "id-arena",
  "isla-lib",
@@ -1937,6 +1943,7 @@ dependencies = [
 [[package]]
 name = "isla-sexp"
 version = "0.2.0"
+source = "git+https://github.com/rems-project/isla.git?rev=2a4bd429b56634db52d59707b83090a535b5c4bc#2a4bd429b56634db52d59707b83090a535b5c4bc"
 dependencies = [
  "isla-mml",
  "proc-macro2",

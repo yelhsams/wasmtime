@@ -30,8 +30,8 @@ cranelift-isle = { path = "../../isle" }
 cranelift-codegen = { path = "../../../codegen" }
 cranelift-reader = { path = "../../../reader" }
 cranelift-codegen-meta = { path = "../../../codegen/meta" }
-isla = { path = "../../../../../isla" }
-isla-lib = { path = "../../../../../isla/isla-lib" }
+isla = { git = "https://github.com/rems-project/isla.git", rev = "2a4bd429b56634db52d59707b83090a535b5c4bc" }
+isla-lib = { git = "https://github.com/rems-project/isla.git", rev = "2a4bd429b56634db52d59707b83090a535b5c4bc" }
 anyhow = { workspace = true }
 veri_ir = { path = "../veri_ir" }
 easy-smt = { git = "https://github.com/elliottt/easy-smt.git" }
