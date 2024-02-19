@@ -574,7 +574,14 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
             .iter()
             .map(|c| self.case(c))
             .collect::<Result<_, _>>()?;
-        let cond = Conditions::merge(conds);
+        let mut cond = Conditions::merge(conds);
+
+        // Assert the result is fixed 1-bit vector.
+        // TODO(mbm): decide on verification model for MInst, or explicitly model as void or Unit
+        cond.provides.insert(
+            0,
+            spec_eq(spec_var("result".to_string()), spec_const_bit_vector(1, 1)),
+        );
 
         let spec = Spec {
             term: spec_ident(cfg.term.clone()),
