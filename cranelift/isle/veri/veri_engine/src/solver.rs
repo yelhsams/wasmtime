@@ -707,12 +707,12 @@ impl SolverCtx {
 
                         // Width math
                         if self.dynwidths {
-                            if self.onlywidths {
-                                return xs;
-                            }
                             // The shift arg needs to be extracted to the right width, default to 8 if unknown
                             let y_static_width = self.static_width(&y).unwrap_or(8);
                             let y_rec = self.vir_expr_to_sexp(*y);
+                            if self.onlywidths {
+                                return xs;
+                            }
                             let extract = self.smt.extract(
                                 y_static_width.checked_sub(1).unwrap().try_into().unwrap(),
                                 0,
