@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
 fn define() -> Vec<SpecConfig> {
     // ALUOp
     let alu_ops = vec![
-        //ALUOp::Add,
+        ALUOp::Add,
         //ALUOp::Sub,
         //ALUOp::Orr,
         //ALUOp::OrrNot,
@@ -104,10 +104,7 @@ fn define() -> Vec<SpecConfig> {
     ];
 
     // OperandSize
-    let sizes = vec![
-        OperandSize::Size32,
-        OperandSize::Size64,
-    ];
+    let sizes = vec![OperandSize::Size32, OperandSize::Size64];
 
     // AluRRR
     let alu_rrr = SpecConfig {

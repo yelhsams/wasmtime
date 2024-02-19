@@ -3,99 +3,31 @@
     (provide
         (= result #b1)
         (=>
-            (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
             (and
-                (= rm v0_535)
-                (= v0_537 (zero_ext 128 (extract 31 0 v0_535)))
-                (= rn v0_541)
+                (= rn v0_536)
+                (= rm v0_538)
                 (=
-                    v0_544
+                    v0_581
                     (zero_ext
                         64
-                        (bvlshr
-                            (extract 31 0 v0_541)
-                            (extract
-                                31
-                                0
-                                (sign_ext
-                                    128
-                                    (extract
-                                        63
-                                        0
-                                        (if
-                                            (bvslt
-                                                (bvsrem
-                                                    v0_537
-                                                    (concat #x0000000000000000 #x0000000000000020))
-                                                (concat #x0000000000000000 #x0000000000000000))
-                                            (if
-                                                (bvslt
-                                                    (concat #x0000000000000000 #x0000000000000020)
-                                                    (concat #x0000000000000000 #x0000000000000000))
-                                                (bvsub
-                                                    (bvsrem
-                                                        v0_537
-                                                        (concat
-                                                            #x0000000000000000
-                                                            #x0000000000000020))
-                                                    (concat #x0000000000000000 #x0000000000000020))
-                                                (bvadd
-                                                    (bvsrem
-                                                        v0_537
-                                                        (concat
-                                                            #x0000000000000000
-                                                            #x0000000000000020))
-                                                    (concat #x0000000000000000 #x0000000000000020)))
-                                            (bvsrem
-                                                v0_537
-                                                (concat
-                                                    #x0000000000000000
-                                                    #x0000000000000020)))))))))
-                (= rd v0_544)))
+                        (bvadd
+                            (extract 31 0 (zero_ext 128 (extract 31 0 v0_536)))
+                            (extract 31 0 (zero_ext 128 (extract 31 0 v0_538))))))
+                (= rd v0_581)))
         (=>
-            (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
             (and
-                (= rm v1_535)
-                (= v1_537 (zero_ext 128 (extract 63 0 v1_535)))
-                (= rn v1_541)
+                (= rn v1_536)
+                (= rm v1_538)
                 (=
-                    v1_544
-                    (bvlshr
-                        (extract 63 0 v1_541)
-                        (extract
-                            63
-                            0
-                            (sign_ext
-                                128
-                                (extract
-                                    63
-                                    0
-                                    (if
-                                        (bvslt
-                                            (bvsrem
-                                                v1_537
-                                                (concat #x0000000000000000 #x0000000000000040))
-                                            (concat #x0000000000000000 #x0000000000000000))
-                                        (if
-                                            (bvslt
-                                                (concat #x0000000000000000 #x0000000000000040)
-                                                (concat #x0000000000000000 #x0000000000000000))
-                                            (bvsub
-                                                (bvsrem
-                                                    v1_537
-                                                    (concat #x0000000000000000 #x0000000000000040))
-                                                (concat #x0000000000000000 #x0000000000000040))
-                                            (bvadd
-                                                (bvsrem
-                                                    v1_537
-                                                    (concat #x0000000000000000 #x0000000000000040))
-                                                (concat #x0000000000000000 #x0000000000000040)))
-                                        (bvsrem
-                                            v1_537
-                                            (concat #x0000000000000000 #x0000000000000040))))))))
-                (= rd v1_544)))
+                    v1_581
+                    (bvadd
+                        (extract 63 0 (zero_ext 128 (extract 63 0 v1_536)))
+                        (extract 63 0 (zero_ext 128 (extract 63 0 v1_538)))))
+                (= rd v1_581)))
         (=>
-            (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size32)))
             (and
                 (= rm v2_535)
                 (= v2_537 (zero_ext 128 (extract 31 0 v2_535)))
@@ -104,7 +36,7 @@
                     v2_544
                     (zero_ext
                         64
-                        (bvashr
+                        (bvlshr
                             (extract 31 0 v2_541)
                             (extract
                                 31
@@ -145,14 +77,14 @@
                                                     #x0000000000000020)))))))))
                 (= rd v2_544)))
         (=>
-            (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size64)))
             (and
                 (= rm v3_535)
                 (= v3_537 (zero_ext 128 (extract 63 0 v3_535)))
                 (= rn v3_541)
                 (=
                     v3_544
-                    (bvashr
+                    (bvlshr
                         (extract 63 0 v3_541)
                         (extract
                             63
@@ -187,7 +119,7 @@
                                             (concat #x0000000000000000 #x0000000000000040))))))))
                 (= rd v3_544)))
         (=>
-            (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size32)))
             (and
                 (= rm v4_535)
                 (= v4_537 (zero_ext 128 (extract 31 0 v4_535)))
@@ -196,7 +128,7 @@
                     v4_544
                     (zero_ext
                         64
-                        (bvshl
+                        (bvashr
                             (extract 31 0 v4_541)
                             (extract
                                 31
@@ -237,14 +169,14 @@
                                                     #x0000000000000020)))))))))
                 (= rd v4_544)))
         (=>
-            (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
+            (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size64)))
             (and
                 (= rm v5_535)
                 (= v5_537 (zero_ext 128 (extract 63 0 v5_535)))
                 (= rn v5_541)
                 (=
                     v5_544
-                    (bvshl
+                    (bvashr
                         (extract 63 0 v5_541)
                         (extract
                             63
@@ -277,9 +209,103 @@
                                         (bvsrem
                                             v5_537
                                             (concat #x0000000000000000 #x0000000000000040))))))))
-                (= rd v5_544))))
+                (= rd v5_544)))
+        (=>
+            (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size32)))
+            (and
+                (= rm v6_535)
+                (= v6_537 (zero_ext 128 (extract 31 0 v6_535)))
+                (= rn v6_541)
+                (=
+                    v6_544
+                    (zero_ext
+                        64
+                        (bvshl
+                            (extract 31 0 v6_541)
+                            (extract
+                                31
+                                0
+                                (sign_ext
+                                    128
+                                    (extract
+                                        63
+                                        0
+                                        (if
+                                            (bvslt
+                                                (bvsrem
+                                                    v6_537
+                                                    (concat #x0000000000000000 #x0000000000000020))
+                                                (concat #x0000000000000000 #x0000000000000000))
+                                            (if
+                                                (bvslt
+                                                    (concat #x0000000000000000 #x0000000000000020)
+                                                    (concat #x0000000000000000 #x0000000000000000))
+                                                (bvsub
+                                                    (bvsrem
+                                                        v6_537
+                                                        (concat
+                                                            #x0000000000000000
+                                                            #x0000000000000020))
+                                                    (concat #x0000000000000000 #x0000000000000020))
+                                                (bvadd
+                                                    (bvsrem
+                                                        v6_537
+                                                        (concat
+                                                            #x0000000000000000
+                                                            #x0000000000000020))
+                                                    (concat #x0000000000000000 #x0000000000000020)))
+                                            (bvsrem
+                                                v6_537
+                                                (concat
+                                                    #x0000000000000000
+                                                    #x0000000000000020)))))))))
+                (= rd v6_544)))
+        (=>
+            (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
+            (and
+                (= rm v7_535)
+                (= v7_537 (zero_ext 128 (extract 63 0 v7_535)))
+                (= rn v7_541)
+                (=
+                    v7_544
+                    (bvshl
+                        (extract 63 0 v7_541)
+                        (extract
+                            63
+                            0
+                            (sign_ext
+                                128
+                                (extract
+                                    63
+                                    0
+                                    (if
+                                        (bvslt
+                                            (bvsrem
+                                                v7_537
+                                                (concat #x0000000000000000 #x0000000000000040))
+                                            (concat #x0000000000000000 #x0000000000000000))
+                                        (if
+                                            (bvslt
+                                                (concat #x0000000000000000 #x0000000000000040)
+                                                (concat #x0000000000000000 #x0000000000000000))
+                                            (bvsub
+                                                (bvsrem
+                                                    v7_537
+                                                    (concat #x0000000000000000 #x0000000000000040))
+                                                (concat #x0000000000000000 #x0000000000000040))
+                                            (bvadd
+                                                (bvsrem
+                                                    v7_537
+                                                    (concat #x0000000000000000 #x0000000000000040))
+                                                (concat #x0000000000000000 #x0000000000000040)))
+                                        (bvsrem
+                                            v7_537
+                                            (concat #x0000000000000000 #x0000000000000040))))))))
+                (= rd v7_544))))
     (require
         (or
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size32)))
+            (and (= alu_op (ALUOp.Add)) (= size (OperandSize.Size64)))
             (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size32)))
             (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size64)))
             (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size32)))
