@@ -5,13 +5,13 @@
         (=>
             (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size64)))
             (and
-                (= rm v535)
-                (= v537 (zero_ext 128 (extract 63 0 v535)))
-                (= rn v541)
+                (= rm v0_535)
+                (= v0_537 (zero_ext 128 (extract 63 0 v0_535)))
+                (= rn v0_541)
                 (=
-                    v544
+                    v0_544
                     (bvlshr
-                        (extract 63 0 v541)
+                        (extract 63 0 v0_541)
                         (extract
                             63
                             0
@@ -23,7 +23,7 @@
                                     (if
                                         (bvslt
                                             (bvsrem
-                                                v537
+                                                v0_537
                                                 (concat #x0000000000000000 #x0000000000000040))
                                             (concat #x0000000000000000 #x0000000000000000))
                                         (if
@@ -32,28 +32,28 @@
                                                 (concat #x0000000000000000 #x0000000000000000))
                                             (bvsub
                                                 (bvsrem
-                                                    v537
+                                                    v0_537
                                                     (concat #x0000000000000000 #x0000000000000040))
                                                 (concat #x0000000000000000 #x0000000000000040))
                                             (bvadd
                                                 (bvsrem
-                                                    v537
+                                                    v0_537
                                                     (concat #x0000000000000000 #x0000000000000040))
                                                 (concat #x0000000000000000 #x0000000000000040)))
                                         (bvsrem
-                                            v537
+                                            v0_537
                                             (concat #x0000000000000000 #x0000000000000040))))))))
-                (= rd v544)))
+                (= rd v0_544)))
         (=>
             (and (= alu_op (ALUOp.Asr)) (= size (OperandSize.Size64)))
             (and
-                (= rm v535)
-                (= v537 (zero_ext 128 (extract 63 0 v535)))
-                (= rn v541)
+                (= rm v1_535)
+                (= v1_537 (zero_ext 128 (extract 63 0 v1_535)))
+                (= rn v1_541)
                 (=
-                    v544
+                    v1_544
                     (bvashr
-                        (extract 63 0 v541)
+                        (extract 63 0 v1_541)
                         (extract
                             63
                             0
@@ -65,7 +65,7 @@
                                     (if
                                         (bvslt
                                             (bvsrem
-                                                v537
+                                                v1_537
                                                 (concat #x0000000000000000 #x0000000000000040))
                                             (concat #x0000000000000000 #x0000000000000000))
                                         (if
@@ -74,28 +74,28 @@
                                                 (concat #x0000000000000000 #x0000000000000000))
                                             (bvsub
                                                 (bvsrem
-                                                    v537
+                                                    v1_537
                                                     (concat #x0000000000000000 #x0000000000000040))
                                                 (concat #x0000000000000000 #x0000000000000040))
                                             (bvadd
                                                 (bvsrem
-                                                    v537
+                                                    v1_537
                                                     (concat #x0000000000000000 #x0000000000000040))
                                                 (concat #x0000000000000000 #x0000000000000040)))
                                         (bvsrem
-                                            v537
+                                            v1_537
                                             (concat #x0000000000000000 #x0000000000000040))))))))
-                (= rd v544)))
+                (= rd v1_544)))
         (=>
             (and (= alu_op (ALUOp.Lsl)) (= size (OperandSize.Size64)))
             (and
-                (= rm v535)
-                (= v537 (zero_ext 128 (extract 63 0 v535)))
-                (= rn v541)
+                (= rm v2_535)
+                (= v2_537 (zero_ext 128 (extract 63 0 v2_535)))
+                (= rn v2_541)
                 (=
-                    v544
+                    v2_544
                     (bvshl
-                        (extract 63 0 v541)
+                        (extract 63 0 v2_541)
                         (extract
                             63
                             0
@@ -107,7 +107,7 @@
                                     (if
                                         (bvslt
                                             (bvsrem
-                                                v537
+                                                v2_537
                                                 (concat #x0000000000000000 #x0000000000000040))
                                             (concat #x0000000000000000 #x0000000000000000))
                                         (if
@@ -116,18 +116,18 @@
                                                 (concat #x0000000000000000 #x0000000000000000))
                                             (bvsub
                                                 (bvsrem
-                                                    v537
+                                                    v2_537
                                                     (concat #x0000000000000000 #x0000000000000040))
                                                 (concat #x0000000000000000 #x0000000000000040))
                                             (bvadd
                                                 (bvsrem
-                                                    v537
+                                                    v2_537
                                                     (concat #x0000000000000000 #x0000000000000040))
                                                 (concat #x0000000000000000 #x0000000000000040)))
                                         (bvsrem
-                                            v537
+                                            v2_537
                                             (concat #x0000000000000000 #x0000000000000040))))))))
-                (= rd v544))))
+                (= rd v2_544))))
     (require
         (or
             (and (= alu_op (ALUOp.Lsr)) (= size (OperandSize.Size64)))

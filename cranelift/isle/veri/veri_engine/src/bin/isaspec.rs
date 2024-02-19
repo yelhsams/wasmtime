@@ -572,7 +572,8 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
         let conds: Vec<Conditions> = cfg
             .cases
             .iter()
-            .map(|c| self.case(c))
+            .enumerate()
+            .map(|(i, c)| self.case(i, c))
             .collect::<Result<_, _>>()?;
         let mut cond = Conditions::merge(conds);
 
@@ -593,8 +594,9 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
         Ok(spec)
     }
 
-    fn case(&self, case: &InstConfig) -> anyhow::Result<Conditions> {
+    fn case(&self, i: usize, case: &InstConfig) -> anyhow::Result<Conditions> {
         let mut converter = TraceConverter::new(case.clone(), &self.iarch);
+        converter.set_var_prefix(format!("v{i}_"));
         let conds = converter.convert()?;
         Ok(conds)
     }
@@ -603,6 +605,7 @@ impl<'ir, B: BV> SpecConverter<'ir, B> {
 struct TraceConverter<'ir, B: BV> {
     cfg: InstConfig,
     iarch: &'ir Initialized<'ir, B>,
+    var_prefix: String,
 
     // Keep track of registers read and written in the trace.
     reg_reads: HashSet<String>,
@@ -618,12 +621,17 @@ impl<'ir, B: BV> TraceConverter<'ir, B> {
         Self {
             cfg: cfg.clone(),
             iarch,
+            var_prefix: "v".to_string(),
 
             reg_reads: HashSet::new(),
             reg_writes: HashSet::new(),
             ty: HashMap::new(),
             funty: HashMap::new(),
         }
+    }
+
+    fn set_var_prefix(&mut self, prefix: String) {
+        self.var_prefix = prefix;
     }
 
     fn convert(&mut self) -> anyhow::Result<Conditions> {
@@ -850,7 +858,7 @@ impl<'ir, B: BV> TraceConverter<'ir, B> {
     }
 
     fn sym(&self, s: &Sym) -> SpecExpr {
-        spec_var(format!("v{}", s))
+        spec_var(format!("{}{}", self.var_prefix, s))
     }
 
     fn infer(&self, exp: &smtlib::Exp<Sym>) -> Option<smtlib::Ty> {
