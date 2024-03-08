@@ -1781,6 +1781,7 @@ fn resolve_dynamic_widths(
                 match ty {
                     Type::BitVector(w) => {
                         let width_name = format!("width__{}", t);
+                        ctx.additional_decls.push((width_name.clone(), ctx.smt.int_sort()));
                         let atom = ctx.smt.atom(&width_name);
                         let width = ctx.smt.get_value(vec![atom]).unwrap().first().unwrap().1;
                         let width_int = u8::try_from(ctx.smt.get(width)).unwrap();

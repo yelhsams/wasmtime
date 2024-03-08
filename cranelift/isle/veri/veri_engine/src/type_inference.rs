@@ -1604,7 +1604,11 @@ fn add_rule_constraints(
             // set args in rule equal to args in annotation
             for (child, arg) in curr.children.iter().zip(&annotation.sig.args) {
                 let rule_type_var = child.type_var;
-                let annotation_type_var = annotation_info.var_to_type_var[&arg.name];
+
+                // What should the annotation type var be?
+                let annotation_type_var = if annotation_info.var_to_type_var.contains_key(&arg.name) {
+                    annotation_info.var_to_type_var[&arg.name]} else {0};
+                
 
                 // essentially constant propagate: if we know the value from the rule arg being
                 // provided as a literal, propagate this to the annotation.
@@ -1616,7 +1620,8 @@ fn add_rule_constraints(
             }
 
             for (child, arg) in children.iter().zip(&annotation.sig.args) {
-                let annotation_type_var = annotation_info.var_to_type_var[&arg.name];
+                let annotation_type_var = if annotation_info.var_to_type_var.contains_key(&arg.name) {
+                        annotation_info.var_to_type_var[&arg.name]} else {0};
                 let arg_name = format!(
                     "{}__{}__{}",
                     annotation_info.term, arg.name, annotation_type_var
@@ -1630,7 +1635,8 @@ fn add_rule_constraints(
                 ))
             }
             // set term ret var equal to annotation ret var
-            let ret_var = annotation_info.var_to_type_var[&annotation.sig.ret.name];
+            let ret_var = if annotation_info.var_to_type_var.contains_key(&annotation.sig.ret.name) {
+                    annotation_info.var_to_type_var[&annotation.sig.ret.name]} else {0};
             tree.var_constraints
                 .insert(TypeExpr::Variable(curr.type_var, ret_var));
             let ret_name = format!(
