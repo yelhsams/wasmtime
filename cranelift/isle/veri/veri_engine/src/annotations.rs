@@ -341,6 +341,7 @@ pub fn parse_annotations(defs: &Defs, termenv: &TermEnv, typeenv: &TypeEnv) -> A
                 ast::ModelValue::EnumValues(vals) => {
                     for (v, e) in vals {
                         let ident = ast::Ident(format!("{}.{}", name.0, v.0), v.1);
+                        dbg!(&ident);
                         let term_id = termenv.get_term_by_name(typeenv, &ident).unwrap();
                         let val = spec_to_expr(e, &env);
                         let ty = match val {
