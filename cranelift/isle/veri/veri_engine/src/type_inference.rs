@@ -1608,7 +1608,6 @@ fn add_rule_constraints(
                 // What should the annotation type var be?
                 //println!("{}", &arg.name);
                 let annotation_type_var = annotation_info.var_to_type_var[&arg.name];
-                
 
                 // essentially constant propagate: if we know the value from the rule arg being
                 // provided as a literal, propagate this to the annotation.
@@ -1620,8 +1619,12 @@ fn add_rule_constraints(
             }
 
             for (child, arg) in children.iter().zip(&annotation.sig.args) {
-                let annotation_type_var = if annotation_info.var_to_type_var.contains_key(&arg.name) {
-                        annotation_info.var_to_type_var[&arg.name]} else {0};
+                let annotation_type_var = if annotation_info.var_to_type_var.contains_key(&arg.name)
+                {
+                    annotation_info.var_to_type_var[&arg.name]
+                } else {
+                    0
+                };
                 let arg_name = format!(
                     "{}__{}__{}",
                     annotation_info.term, arg.name, annotation_type_var
@@ -1635,11 +1638,17 @@ fn add_rule_constraints(
                 ))
             }
             // set term ret var equal to annotation ret var
-            // rules, ex, (rule (lower (iadd x (iconst (imml2 v)))) 
-                            // (aarch64_add_imm x v)
+            // rules, ex, (rule (lower (iadd x (iconst (imml2 v))))
+            // (aarch64_add_imm x v)
             // spec for iadd provides that the result is bvadd x y
-            let ret_var = if annotation_info.var_to_type_var.contains_key(&annotation.sig.ret.name) {
-                    annotation_info.var_to_type_var[&annotation.sig.ret.name]} else {0};
+            let ret_var = if annotation_info
+                .var_to_type_var
+                .contains_key(&annotation.sig.ret.name)
+            {
+                annotation_info.var_to_type_var[&annotation.sig.ret.name]
+            } else {
+                0
+            };
             tree.var_constraints
                 .insert(TypeExpr::Variable(curr.type_var, ret_var));
             let ret_name = format!(
