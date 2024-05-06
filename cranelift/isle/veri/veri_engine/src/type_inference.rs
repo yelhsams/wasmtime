@@ -1,12 +1,15 @@
-use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
-
 use crate::annotations::AnnotationEnv;
 use crate::termname::pattern_contains_termname;
 use cranelift_isle as isle;
+use easy_smt::SExprData;
+use easy_smt::{Response, SExpr};
 use isle::sema::{Pattern, TermEnv, TermId, TypeEnv, VarId};
 use itertools::izip;
+use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
+use strum::IntoEnumIterator;
+use strum_macros::{EnumIter, FromRepr};
 use veri_ir::{annotation_ir, ConcreteTest, Expr, TermSignature, Type, TypeContext};
 
 use crate::{Config, FLAGS_WIDTH, REG_WIDTH};
@@ -290,7 +293,7 @@ fn type_annotations_using_rule<'a>(
                 .var_constraints
                 .insert(TypeExpr::Variable(lhs.type_var, rhs.type_var));
 
-            let (solution, bv_unknown_width_sets) = solve_constraints(
+            let (solution, solution_smt, bv_unknown_width_sets) = solve_constraints(
                 parse_tree.concrete_constraints,
                 parse_tree.var_constraints,
                 parse_tree.bv_constraints,
@@ -299,12 +302,22 @@ fn type_annotations_using_rule<'a>(
             );
 
             let mut tymap = HashMap::new();
+            let mut tymap_smt = HashMap::new();
 
             for (expr, t) in &parse_tree.ty_vars {
                 if let Some(ty) = solution.get(&t) {
                     tymap.insert(*t, convert_type(ty));
                 } else {
                     panic!("missing type variable {} in solution for: {:?}", t, expr);
+                }
+
+                if let Some(ty) = solution_smt.get(&t) {
+                    tymap_smt.insert(*t, convert_type(ty));
+                } else {
+                    panic!(
+                        "missing type variable {} in smt solution for: {:?}",
+                        t, expr
+                    );
                 }
             }
             let mut quantified_vars = vec![];
@@ -349,6 +362,7 @@ fn type_annotations_using_rule<'a>(
                 tyctx: TypeContext {
                     tyvars: parse_tree.ty_vars.clone(),
                     tymap,
+                    tymap_smt,
                     tyvals: parse_tree.type_var_to_val_map,
                     bv_unknown_width_sets,
                 },
@@ -1698,13 +1712,64 @@ fn add_rule_constraints(
 //   bv -> t7, t8
 
 // TODO: clean up
+
 fn solve_constraints(
     concrete: HashSet<TypeExpr>,
     var: HashSet<TypeExpr>,
     bv: HashSet<TypeExpr>,
     vals: &mut HashMap<u32, i128>,
     ty_vars: Option<&HashMap<veri_ir::Expr, u32>>,
+) -> (
+    HashMap<u32, annotation_ir::Type>,
+    HashMap<u32, annotation_ir::Type>,
+    HashMap<u32, u32>,
+) {
+    // SMT
+    println!("- START: smt type inference --------------------------");
+    let (result_smt, _) = solve_constraints_smt(&concrete, &var, &bv, vals);
+    println!("- END: smt type inference ----------------------------");
+
+    // Use the original unification-based algorithm.
+    let (result_unify, bv_unknown_width_sets) =
+        solve_constraints_unify(concrete, var, bv, vals, ty_vars);
+
+    // // Check equivalence (on the results returns by unification).
+    // for (v, ty) in &result_unify {
+    //     let type_unify = convert_type(ty);
+    //     let type_smt = convert_type(&result_smt[v]);
+    //     assert_eq!(type_unify, type_smt);
+    // }
+
+    // Return the original.
+    (result_unify, result_smt, bv_unknown_width_sets)
+}
+
+fn solve_constraints_unify(
+    concrete: HashSet<TypeExpr>,
+    var: HashSet<TypeExpr>,
+    bv: HashSet<TypeExpr>,
+    vals: &mut HashMap<u32, i128>,
+    ty_vars: Option<&HashMap<veri_ir::Expr, u32>>,
 ) -> (HashMap<u32, annotation_ir::Type>, HashMap<u32, u32>) {
+    // // Debug output.
+    // for type_expr in &concrete {
+    //     println!("{type_expr:?}");
+    // }
+    // for type_expr in &var {
+    //     println!("{type_expr:?}");
+    // }
+    // for type_expr in &bv {
+    //     println!("{type_expr:?}");
+    // }
+    // for (v, val) in &*vals {
+    //     println!("{v} = {val}");
+    // }
+    // if let Some(expr_to_ty_var) = ty_vars {
+    //     for (expr, ty_var) in expr_to_ty_var {
+    //         println!("{ty_var:?}\t{expr:?}");
+    //     }
+    // }
+
     // maintain a union find that maps types to sets of type vars that have that type
     let mut union_find = HashMap::new();
     let mut poly = 0;
@@ -1982,6 +2047,340 @@ fn annotation_type_for_vir_type(ty: &Type) -> annotation_ir::Type {
         Type::Int => annotation_ir::Type::Int,
     }
 }
+
+// --------------------------------------------------------------------------
+
+fn solve_constraints_smt(
+    concrete: &HashSet<TypeExpr>,
+    var: &HashSet<TypeExpr>,
+    bv: &HashSet<TypeExpr>,
+    vals: &mut HashMap<u32, i128>,
+    //ty_vars: Option<&HashMap<veri_ir::Expr, u32>>,
+) -> (HashMap<u32, annotation_ir::Type>, HashMap<u32, u32>) {
+    // Setup
+    let smt = easy_smt::ContextBuilder::new()
+        .replay_file(Some(std::fs::File::create("type_solver.smt2").unwrap()))
+        .solver("z3", ["-smt2", "-in"])
+        .build()
+        .unwrap();
+
+    let mut solver = TypeSolver::new(smt);
+    solver.add_constraints(concrete);
+    solver.add_constraints(var);
+    solver.add_constraints(bv);
+    solver.set_values(vals);
+
+    let result = solver.solve();
+
+    let bv_unknown_width_sets = HashMap::new();
+    (result, bv_unknown_width_sets)
+}
+
+struct TypeSolver {
+    smt: easy_smt::Context,
+
+    // Symbolic type for each type variable.
+    symbolic_types: HashMap<u32, SymbolicType>,
+}
+
+impl TypeSolver {
+    fn new(smt: easy_smt::Context) -> Self {
+        Self {
+            smt,
+            symbolic_types: HashMap::new(),
+        }
+    }
+
+    fn solve(&mut self) -> HashMap<u32, annotation_ir::Type> {
+        // TODO(mbm): return result rather than assert
+        let response = self.smt.check().unwrap();
+        assert_eq!(response, Response::Sat);
+
+        let vs: Vec<_> = self.symbolic_types.keys().copied().collect();
+        let mut tys = HashMap::new();
+        for v in vs {
+            tys.insert(v, self.get_type(v));
+        }
+        tys
+    }
+
+    fn get_type(&mut self, v: u32) -> annotation_ir::Type {
+        let symbolic_type = self.get_symbolic_type(v);
+
+        // Lookup disciminant from the model.
+        let discriminant_value =
+            usize::try_from(self.get_value_data(symbolic_type.discriminant.expr))
+                .expect("discriminant value should be integer");
+        let discriminant =
+            TypeDiscriminant::from_repr(discriminant_value).expect("unknown discriminant value");
+
+        match discriminant {
+            TypeDiscriminant::BitVector => {
+                // Is the bitvector width known?
+                let has_width = self.get_bool_value(symbolic_type.bitvector_width.some.expr);
+                if !has_width {
+                    return annotation_ir::Type::BitVector;
+                }
+
+                // Lookup width.
+                let width =
+                    usize::try_from(self.get_value_data(symbolic_type.bitvector_width.value.expr))
+                        .expect("bitvector width should be integer");
+
+                annotation_ir::Type::BitVectorWithWidth(width)
+            }
+            TypeDiscriminant::Bool => annotation_ir::Type::Bool,
+            TypeDiscriminant::Int => annotation_ir::Type::Int,
+        }
+    }
+
+    fn get_bool_value(&mut self, expr: SExpr) -> bool {
+        let value = self.get_value(expr);
+        if value == self.smt.true_() {
+            true
+        } else if value == self.smt.false_() {
+            false
+        } else {
+            unreachable!("value is not boolean");
+        }
+    }
+
+    fn get_value_data(&mut self, expr: SExpr) -> SExprData {
+        let value = self.get_value(expr);
+        self.smt.get(value)
+    }
+
+    fn get_value(&mut self, expr: SExpr) -> SExpr {
+        let values = self.smt.get_value(vec![expr]).unwrap();
+        assert_eq!(values.len(), 1);
+        values[0].1
+    }
+
+    fn add_constraints(&mut self, type_exprs: &HashSet<TypeExpr>) {
+        for type_expr in type_exprs {
+            self.add_constraint(type_expr);
+        }
+    }
+
+    fn add_constraint(&mut self, type_expr: &TypeExpr) {
+        match type_expr {
+            TypeExpr::Concrete(v, ty) => self.concrete(*v, ty),
+            TypeExpr::Variable(u, v) => self.variable(*u, *v),
+            TypeExpr::WidthInt(v, w) => self.width_int(*v, *w),
+        }
+    }
+
+    fn set_values(&mut self, vals: &HashMap<u32, i128>) {
+        for (v, n) in vals {
+            self.set_value(*v, *n);
+        }
+    }
+
+    fn set_value(&mut self, v: u32, n: i128) {
+        // If it's an integer, it should have this value.
+        let symbolic_type = self.get_symbolic_type(v);
+        self.smt
+            .assert(
+                self.smt.imp(
+                    self.smt.eq(
+                        symbolic_type.discriminant.expr,
+                        self.smt.numeral(TypeDiscriminant::Int as u8),
+                    ),
+                    self.smt.and(
+                        symbolic_type.integer_value.some.expr,
+                        self.smt
+                            .eq(symbolic_type.integer_value.value.expr, self.smt.numeral(n)),
+                    ),
+                ),
+            )
+            .unwrap();
+    }
+
+    fn concrete(&mut self, v: u32, ty: &annotation_ir::Type) {
+        let symbolic_type = self.get_symbolic_type(v);
+        match ty {
+            annotation_ir::Type::BitVector => {
+                self.assert_type_discriminant(&symbolic_type, TypeDiscriminant::BitVector);
+            }
+            annotation_ir::Type::BitVectorWithWidth(w) => {
+                self.assert_type_discriminant(&symbolic_type, TypeDiscriminant::BitVector);
+                self.assert_option_value(&symbolic_type.bitvector_width, self.smt.numeral(*w));
+            }
+            annotation_ir::Type::Int => {
+                self.assert_type_discriminant(&symbolic_type, TypeDiscriminant::Int)
+            }
+            annotation_ir::Type::Bool => {
+                self.assert_type_discriminant(&symbolic_type, TypeDiscriminant::Bool)
+            }
+            _ => todo!("concrete: {ty:?}"),
+        }
+    }
+
+    fn variable(&mut self, u: u32, v: u32) {
+        let a = self.get_symbolic_type(u);
+        let b = self.get_symbolic_type(v);
+        self.assert_types_equal(&a, &b);
+    }
+
+    fn width_int(&mut self, v: u32, w: u32) {
+        // Type v is a bitvector, type w is an integer, and the bitwidth of v is
+        // equal to the value of w.
+        let bitvector_type = self.get_symbolic_type(v);
+        let width_type = self.get_symbolic_type(w);
+
+        self.assert_type_discriminant(&bitvector_type, TypeDiscriminant::BitVector);
+        self.assert_type_discriminant(&width_type, TypeDiscriminant::Int);
+        self.assert_options_equal(&bitvector_type.bitvector_width, &width_type.integer_value)
+    }
+
+    fn assert_type_discriminant(&mut self, symbolic_type: &SymbolicType, disc: TypeDiscriminant) {
+        let disc = self.smt.numeral(disc as u8);
+        let eq = self.smt.eq(symbolic_type.discriminant.expr, disc);
+        self.smt.assert(eq).unwrap();
+    }
+
+    fn assert_option_value(&mut self, symbolic_option: &SymbolicOption, value: SExpr) {
+        self.smt.assert(symbolic_option.some.expr).unwrap();
+        self.smt
+            .assert(self.smt.eq(symbolic_option.value.expr, value))
+            .unwrap();
+    }
+
+    fn assert_types_equal(&mut self, a: &SymbolicType, b: &SymbolicType) {
+        // Note that we assert nothing about the integer value, only that the
+        // types are the same.
+        self.assert_variables_equal(&a.discriminant, &b.discriminant);
+        self.assert_options_equal(&a.bitvector_width, &b.bitvector_width);
+    }
+
+    fn assert_options_equal(&mut self, a: &SymbolicOption, b: &SymbolicOption) {
+        self.assert_variables_equal(&a.some, &b.some);
+        self.assert_variables_equal(&a.value, &b.value);
+    }
+
+    fn assert_variables_equal(&mut self, a: &SymbolicVariable, b: &SymbolicVariable) {
+        self.smt.assert(self.smt.eq(a.expr, b.expr)).unwrap();
+    }
+
+    fn get_symbolic_type(&mut self, v: u32) -> SymbolicType {
+        self.symbolic_types
+            .entry(v)
+            .or_insert_with(|| SymbolicType::decl(&mut self.smt, v))
+            .clone()
+    }
+}
+
+#[derive(Clone)]
+struct SymbolicVariable {
+    name: String,
+    expr: SExpr,
+}
+
+impl SymbolicVariable {
+    fn integer(smt: &mut easy_smt::Context, name: String) -> Self {
+        Self::decl_sort(smt, name, smt.int_sort())
+    }
+
+    fn boolean(smt: &mut easy_smt::Context, name: String) -> Self {
+        Self::decl_sort(smt, name, smt.bool_sort())
+    }
+
+    fn decl_sort(smt: &mut easy_smt::Context, name: String, sort: SExpr) -> Self {
+        smt.declare_const(name.clone(), sort).unwrap();
+        let expr = smt.atom(name.clone());
+        Self { name, expr }
+    }
+}
+
+#[derive(Clone)]
+struct SymbolicOption {
+    some: SymbolicVariable,
+    value: SymbolicVariable,
+}
+
+impl SymbolicOption {
+    fn decl(smt: &mut easy_smt::Context, value: SymbolicVariable) -> Self {
+        let some = SymbolicVariable::boolean(smt, format!("{}_some", value.name));
+        Self { some, value }
+    }
+}
+
+#[derive(EnumIter, FromRepr, Debug)]
+enum TypeDiscriminant {
+    BitVector = 1,
+    Int = 2,
+    Bool = 3,
+}
+
+#[derive(Clone)]
+struct SymbolicType {
+    discriminant: SymbolicVariable,
+    bitvector_width: SymbolicOption,
+    integer_value: SymbolicOption,
+}
+
+impl SymbolicType {
+    fn decl(smt: &mut easy_smt::Context, v: u32) -> Self {
+        let prefix = format!("t{}", v);
+
+        // Disciminant.
+        let discriminant = SymbolicVariable::integer(smt, format!("{prefix}_disc"));
+
+        // Invariant: discriminant is one of the allowed values
+        smt.assert(smt.or_many(
+            TypeDiscriminant::iter().map(|d| smt.eq(discriminant.expr, smt.numeral(d as u8))),
+        ))
+        .unwrap();
+
+        // Bitvector width (option).
+        let bitvector_width_value =
+            SymbolicVariable::integer(smt, format!("{prefix}_bitvector_width"));
+        let bitvector_width = SymbolicOption::decl(smt, bitvector_width_value);
+
+        // Invariant: if not bitvector then bitvector width option is none.
+        smt.assert(smt.imp(
+            smt.distinct(
+                discriminant.expr,
+                smt.numeral(TypeDiscriminant::BitVector as u8),
+            ),
+            smt.not(bitvector_width.some.expr),
+        ))
+        .unwrap();
+
+        // Invariant: if bitvector width option is none, then its value is 0.
+        smt.assert(smt.imp(
+            smt.not(bitvector_width.some.expr),
+            smt.eq(bitvector_width.value.expr, smt.numeral(0)),
+        ))
+        .unwrap();
+
+        // Integer value.
+        let integer_value_value = SymbolicVariable::integer(smt, format!("{prefix}_integer_value"));
+        let integer_value = SymbolicOption::decl(smt, integer_value_value);
+
+        // Invariant: if not integer then integer value option is none.
+        smt.assert(smt.imp(
+            smt.distinct(discriminant.expr, smt.numeral(TypeDiscriminant::Int as u8)),
+            smt.not(integer_value.some.expr),
+        ))
+        .unwrap();
+
+        // Invariant: if integer value option is none, then its value is 0.
+        smt.assert(smt.imp(
+            smt.not(integer_value.some.expr),
+            smt.eq(integer_value.value.expr, smt.numeral(0)),
+        ))
+        .unwrap();
+
+        Self {
+            discriminant,
+            bitvector_width,
+            integer_value,
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
 
 fn create_parse_tree_pattern(
     rule: &isle::sema::Rule,
@@ -2341,7 +2740,7 @@ fn test_solve_constraints() {
         (5, annotation_ir::Type::BitVectorWithWidth(8)),
         (6, annotation_ir::Type::BitVectorWithWidth(16)),
     ]);
-    let (sol, bvsets) = solve_constraints(concrete, var, bv, &mut HashMap::new(), None);
+    let (sol, _, bvsets) = solve_constraints(concrete, var, bv, &mut HashMap::new(), None);
     assert_eq!(expected, sol);
     assert!(bvsets.is_empty());
 
@@ -2373,7 +2772,7 @@ fn test_solve_constraints() {
         (8, annotation_ir::Type::BitVectorUnknown(7)),
     ]);
     let expected_bvsets = HashMap::from([(7, 0), (8, 0)]);
-    let (sol, bvsets) = solve_constraints(concrete, var, bv, &mut HashMap::new(), None);
+    let (sol, _, bvsets) = solve_constraints(concrete, var, bv, &mut HashMap::new(), None);
     assert_eq!(expected, sol);
     assert_eq!(expected_bvsets, bvsets);
 }

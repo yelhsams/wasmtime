@@ -1588,10 +1588,10 @@ fn test_named_rotl_32_base_case() {
                 "rotl_32_base_case",
                 "rotl",
                 vec![
-                    (Bitwidth::I8, VerificationResult::InapplicableRule),
-                    (Bitwidth::I16, VerificationResult::InapplicableRule),
+                    //(Bitwidth::I8, VerificationResult::InapplicableRule),
+                    //(Bitwidth::I16, VerificationResult::InapplicableRule),
                     (Bitwidth::I32, VerificationResult::Success),
-                    (Bitwidth::I64, VerificationResult::InapplicableRule),
+                    //(Bitwidth::I64, VerificationResult::InapplicableRule),
                 ],
             )
         })

@@ -42,10 +42,8 @@ env_logger = "0.10.0"
 retry = "2.0.0"
 sha2 = "0.8.1"
 crossbeam = "0.8.1"
-
-[dev-dependencies]
-strum = "0.24.0"
-strum_macros = "0.24.0"
+strum = "0.26.1"
+strum_macros = "0.26.1"
 
 [features]
 default = ["cranelift-codegen/all-arch", "cranelift-codegen/trace-log"]
