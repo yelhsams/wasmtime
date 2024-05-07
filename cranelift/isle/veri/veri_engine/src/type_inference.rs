@@ -64,13 +64,15 @@ pub struct TypeVarNode {
 // Constraints either assign concrete types to type variables
 // or set them equal to other type variables
 enum TypeExpr {
+    // Symbolic sum for now. This only checks if the sum of bv widths of the lhs match the rhs.
+    Symbolic(Vec<u32>, Vec<u32>),
     Concrete(u32, annotation_ir::Type),
     Variable(u32, u32),
     // The type variable of the first arg is equal to the value of the second
     WidthInt(u32, u32),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AnnotationTypeInfo {
     // map of annotation variable to assigned type var
     pub term: String,
@@ -151,6 +153,17 @@ pub fn type_rules_with_term_and_types(
         }
     }
     solutions
+}
+
+fn type_to_num(aty: &annotation_ir::Type) -> String {
+    match aty {
+        annotation_ir::Type::BitVectorUnknown(..) => "bvunk".to_string(),
+        annotation_ir::Type::BitVector => "bv".to_string(),
+        annotation_ir::Type::BitVectorWithWidth(w) => format!("bv{}", &w),
+        annotation_ir::Type::Int => "int".to_string(),
+        annotation_ir::Type::Bool => "bool".to_string(),
+        annotation_ir::Type::Poly(_) => "poly".to_string(),
+    }
 }
 
 fn convert_type(aty: &annotation_ir::Type) -> veri_ir::Type {
@@ -301,6 +314,43 @@ fn type_annotations_using_rule<'a>(
                 Some(&parse_tree.ty_vars),
             );
 
+            //* PRINT SMT TYPE INF RESULTS HERE */
+            println!("- START OF RESULTS: smt type inference ----------------------------");
+            let smt = easy_smt::ContextBuilder::new()
+                .replay_file(Some(std::fs::File::create("type_solver.smt2").unwrap()))
+                .solver("z3", ["-smt2", "-in"])
+                .build()
+                .unwrap();
+
+            let mut solver = TypeSolver::new(smt);
+            let lhs = solver.display_isle_pattern(
+                termenv,
+                typeenv,
+                rule,
+                &annotation_infos,
+                &solution_smt,
+                &Pattern::Term(
+                    cranelift_isle::sema::TypeId(0),
+                    rule.root_term,
+                    rule.args.clone(),
+                ),
+                None,
+            );
+            println!("{}", solver.smt.display(lhs));
+
+            println!("=>");
+            let rhs = solver.display_isle_expr(
+                termenv,
+                typeenv,
+                rule,
+                &annotation_infos,
+                &solution_smt,
+                &rule.rhs,
+                None,
+            );
+            println!("{}", solver.smt.display(rhs));
+            println!("- END OF RESULTS: smt type inference ----------------------------");
+            //* END OF PRINT */
             let mut tymap = HashMap::new();
             let mut tymap_smt = HashMap::new();
 
@@ -1186,16 +1236,20 @@ fn add_annotation_constraints(
             let t = tree.next_type_var;
             tree.next_type_var += 1;
 
+            let mut sum_bvs = vec![];
             let mut exprs = vec![];
             for x in xs {
                 let (xe, xt) = add_annotation_constraints(x, tree, annotation_info);
                 tree.bv_constraints
                     .insert(TypeExpr::Concrete(xt, annotation_ir::Type::BitVector));
                 exprs.push(xe);
+                // add each bv to the sum_bv
+                sum_bvs.push(xt);
             }
             tree.bv_constraints
                 .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
-
+            tree.concrete_constraints
+                .insert(TypeExpr::Symbolic(sum_bvs, vec![t]));
             tree.next_type_var += 1;
 
             (veri_ir::Expr::BVConcat(exprs), t)
@@ -1622,7 +1676,6 @@ fn add_rule_constraints(
                 // What should the annotation type var be?
                 //println!("{}", &arg.name);
                 let annotation_type_var = annotation_info.var_to_type_var[&arg.name];
-                
 
                 // essentially constant propagate: if we know the value from the rule arg being
                 // provided as a literal, propagate this to the annotation.
@@ -1634,8 +1687,12 @@ fn add_rule_constraints(
             }
 
             for (child, arg) in children.iter().zip(&annotation.sig.args) {
-                let annotation_type_var = if annotation_info.var_to_type_var.contains_key(&arg.name) {
-                        annotation_info.var_to_type_var[&arg.name]} else {0};
+                let annotation_type_var = if annotation_info.var_to_type_var.contains_key(&arg.name)
+                {
+                    annotation_info.var_to_type_var[&arg.name]
+                } else {
+                    0
+                };
                 let arg_name = format!(
                     "{}__{}__{}",
                     annotation_info.term, arg.name, annotation_type_var
@@ -1649,11 +1706,17 @@ fn add_rule_constraints(
                 ))
             }
             // set term ret var equal to annotation ret var
-            // rules, ex, (rule (lower (iadd x (iconst (imml2 v)))) 
-                            // (aarch64_add_imm x v)
+            // rules, ex, (rule (lower (iadd x (iconst (imml2 v))))
+            // (aarch64_add_imm x v)
             // spec for iadd provides that the result is bvadd x y
-            let ret_var = if annotation_info.var_to_type_var.contains_key(&annotation.sig.ret.name) {
-                    annotation_info.var_to_type_var[&annotation.sig.ret.name]} else {0};
+            let ret_var = if annotation_info
+                .var_to_type_var
+                .contains_key(&annotation.sig.ret.name)
+            {
+                annotation_info.var_to_type_var[&annotation.sig.ret.name]
+            } else {
+                0
+            };
             tree.var_constraints
                 .insert(TypeExpr::Variable(curr.type_var, ret_var));
             let ret_name = format!(
@@ -1952,6 +2015,9 @@ fn solve_constraints_unify(
                 TypeExpr::WidthInt(_, _) => {
                     panic!("Non-bv constraint found in bv constraints: {:#?}", b)
                 }
+                TypeExpr::Symbolic(_, _) => {
+                    panic!("Non-bv constraint found in bv constraints: {:#?}", b)
+                }
             }
         }
         for c in &concrete {
@@ -2167,6 +2233,7 @@ impl TypeSolver {
             TypeExpr::Concrete(v, ty) => self.concrete(*v, ty),
             TypeExpr::Variable(u, v) => self.variable(*u, *v),
             TypeExpr::WidthInt(v, w) => self.width_int(*v, *w),
+            TypeExpr::Symbolic(l, r) => self.symbolic_sum(l.clone(), r.clone()),
         }
     }
 
@@ -2214,6 +2281,26 @@ impl TypeSolver {
             }
             _ => todo!("concrete: {ty:?}"),
         }
+    }
+
+    fn symbolic_sum(&mut self, l: Vec<u32>, r: Vec<u32>) {
+        // get the expressions of each bv we want to add
+        let l_widths: Vec<SExpr> = l
+            .iter()
+            .map(|s| self.get_symbolic_type(*s).bitvector_width.value.expr)
+            .collect();
+
+        // sum them together
+        let l_sum = self.smt.plus_many(l_widths);
+
+        // same for rhs
+        let r_widths: Vec<SExpr> = r
+            .iter()
+            .map(|s| self.get_symbolic_type(*s).bitvector_width.value.expr)
+            .collect();
+        let r_sum = self.smt.plus_many(r_widths);
+
+        self.smt.assert(self.smt.eq(l_sum, r_sum)).unwrap();
     }
 
     fn variable(&mut self, u: u32, v: u32) {
@@ -2267,6 +2354,264 @@ impl TypeSolver {
             .entry(v)
             .or_insert_with(|| SymbolicType::decl(&mut self.smt, v))
             .clone()
+    }
+    fn display_isle_pattern(
+        &mut self,
+        termenv: &TermEnv,
+        typeenv: &TypeEnv,
+        rule: &isle::sema::Rule,
+        annotation_infos: &Vec<AnnotationTypeInfo>,
+        type_sols: &HashMap<u32, veri_ir::annotation_ir::Type>,
+        pat: &Pattern,
+        parent_term: Option<&AnnotationTypeInfo>,
+    ) -> SExpr {
+        let mut to_sexpr =
+            |ai, p, pt| self.display_isle_pattern(termenv, typeenv, rule, ai, type_sols, p, pt);
+
+        let mut anno: Vec<AnnotationTypeInfo> = annotation_infos.clone();
+        match pat {
+            isle::sema::Pattern::Term(_, term_id, args) => {
+                let sym = termenv.terms[term_id.index()].name;
+                let name = typeenv.syms[sym.index()].clone();
+
+                let matches: Vec<&AnnotationTypeInfo> = annotation_infos
+                    .iter()
+                    .filter(|t| t.term.starts_with(&name))
+                    .collect();
+
+                let mut var = " ".to_string();
+                if matches.len() == 0 {
+                    println!("Can't find match for: {}", name);
+                    panic!();
+                } else if matches.len() >= 1 {
+                    var = format!(
+                        "[{}|{}]",
+                        type_to_num(
+                            type_sols
+                                .get(
+                                    &matches
+                                        .first()
+                                        .unwrap()
+                                        .var_to_type_var
+                                        .get("result")
+                                        .unwrap()
+                                )
+                                .unwrap()
+                        ),
+                        name
+                    );
+                    if matches.len() > 1 {
+                        let index = annotation_infos
+                            .iter()
+                            .position(|t| t.term == matches.first().unwrap().term)
+                            .unwrap();
+                        anno.remove(index);
+                    }
+                }
+
+                let mut sexprs: Vec<SExpr> = args
+                    .iter()
+                    .map(|a| to_sexpr(&anno, a, matches.first().copied()))
+                    .collect::<Vec<SExpr>>();
+
+                sexprs.insert(0, self.smt.atom(var));
+                self.smt.list(sexprs)
+            }
+
+            isle::sema::Pattern::Var(_, var_id) => {
+                let sym = rule.vars[var_id.index()].name;
+                let ident = typeenv.syms[sym.index()].clone();
+
+                let mut var = " ".to_string();
+                match parent_term {
+                    Some(value) => {
+                        var = format!(
+                            "[{}|{}]",
+                            type_to_num(
+                                type_sols
+                                    .get(&value.var_to_type_var.get(&ident).unwrap())
+                                    .unwrap()
+                            ),
+                            ident
+                        );
+                    }
+                    None => print!("Not found!"),
+                }
+
+                self.smt.atom(var)
+            }
+            isle::sema::Pattern::BindPattern(_, var_id, subpat) => {
+                let sym = rule.vars[var_id.index()].name;
+                let ident = &typeenv.syms[sym.index()];
+                let subpat_node = to_sexpr(annotation_infos, subpat, parent_term);
+
+                let mut var = " ".to_string();
+                match parent_term {
+                    Some(value) => match value.var_to_type_var.get(ident) {
+                        Some(ty) => {
+                            var =
+                                format!("[{}|{}]", type_to_num(type_sols.get(ty).unwrap()), ident);
+                        }
+                        None => {
+                            var = format!(
+                                "[{}|{}]",
+                                type_to_num(
+                                    type_sols
+                                        .get(&value.var_to_type_var.get("arg").unwrap())
+                                        .unwrap()
+                                ),
+                                ident
+                            );
+                        }
+                    },
+                    None => print!("Not found!"),
+                }
+                // Special case: elide bind patterns to wildcars
+                if matches!(**subpat, isle::sema::Pattern::Wildcard(_)) {
+                    self.smt.atom(&var)
+                } else {
+                    self.smt
+                        .list(vec![self.smt.atom(&var), self.smt.atom("@"), subpat_node])
+                }
+            }
+            isle::sema::Pattern::Wildcard(_) => self.smt.list(vec![self.smt.atom("_")]),
+            isle::sema::Pattern::ConstPrim(_, sym) => {
+                let name = typeenv.syms[sym.index()].clone();
+                self.smt.list(vec![self.smt.atom(name)])
+            }
+            isle::sema::Pattern::ConstInt(_, num) => {
+                let _smt_name_prefix = format!("{}__", num);
+                // TODO: look up BV vs int
+                self.smt.list(vec![self.smt.atom(num.to_string())])
+            }
+            isle::sema::Pattern::And(_, subpats) => {
+                let mut sexprs = subpats
+                    .iter()
+                    .map(|a| to_sexpr(annotation_infos, a, parent_term))
+                    .collect::<Vec<SExpr>>();
+
+                sexprs.insert(0, self.smt.atom("and"));
+                self.smt.list(sexprs)
+            }
+        }
+    }
+    fn display_isle_expr(
+        &self,
+        termenv: &TermEnv,
+        typeenv: &TypeEnv,
+        rule: &isle::sema::Rule,
+        annotation_infos: &Vec<AnnotationTypeInfo>,
+        type_sols: &HashMap<u32, veri_ir::annotation_ir::Type>,
+        expr: &isle::sema::Expr,
+        parent_term: Option<&AnnotationTypeInfo>,
+    ) -> SExpr {
+        let to_sexpr =
+            |ai, e, pt| self.display_isle_expr(termenv, typeenv, rule, ai, type_sols, e, pt);
+
+        let mut anno = annotation_infos.clone();
+
+        match expr {
+            isle::sema::Expr::Term(_, term_id, args) => {
+                let sym = termenv.terms[term_id.index()].name;
+                let name = typeenv.syms[sym.index()].clone();
+
+                let matches: Vec<&AnnotationTypeInfo> = annotation_infos
+                    .iter()
+                    .filter(|t| t.term.starts_with(&name))
+                    .collect();
+
+                let mut var = " ".to_string();
+                if matches.len() == 0 {
+                    println!("Can't find match for: {}", name);
+                    panic!();
+                } else if matches.len() >= 1 {
+                    var = format!(
+                        "[{}|{}]",
+                        type_to_num(
+                            type_sols
+                                .get(
+                                    &matches
+                                        .first()
+                                        .unwrap()
+                                        .var_to_type_var
+                                        .get("result")
+                                        .unwrap()
+                                )
+                                .unwrap()
+                        ),
+                        name
+                    );
+                    if matches.len() > 1 {
+                        let index = annotation_infos
+                            .iter()
+                            .position(|t| t.term == matches.first().unwrap().term)
+                            .unwrap();
+                        anno.remove(index);
+                    }
+                }
+
+                let mut sexprs = args
+                    .iter()
+                    .map(|a| to_sexpr(&anno, a, matches.first().copied()))
+                    .collect::<Vec<SExpr>>();
+                sexprs.insert(0, self.smt.atom(var));
+                self.smt.list(sexprs)
+            }
+            isle::sema::Expr::Var(_, var_id) => {
+                let sym = rule.vars[var_id.index()].name;
+                let ident = typeenv.syms[sym.index()].clone();
+
+                let mut var = " ".to_string();
+                match parent_term {
+                    Some(value) => match value.var_to_type_var.get(&ident) {
+                        Some(ty) => {
+                            var =
+                                format!("[{}|{}]", type_to_num(type_sols.get(ty).unwrap()), ident);
+                        }
+                        None => {
+                            var = format!(
+                                "[{}|{}]",
+                                type_to_num(
+                                    type_sols
+                                        .get(&value.var_to_type_var.get("arg").unwrap())
+                                        .unwrap()
+                                ),
+                                ident
+                            );
+                        }
+                    },
+                    None => print!("Not found!"),
+                }
+
+                self.smt.atom(var)
+            }
+            isle::sema::Expr::ConstPrim(_, sym) => {
+                let name = typeenv.syms[sym.index()].clone();
+                self.smt.list(vec![self.smt.atom(name)])
+            }
+            isle::sema::Expr::ConstInt(_, num) => {
+                let _smt_name_prefix = format!("{}__", num);
+                // TODO: look up BV vs int
+                self.smt.list(vec![self.smt.atom(num.to_string())])
+            }
+            isle::sema::Expr::Let { bindings, body, .. } => {
+                let mut sexprs = vec![];
+                for (varid, _, expr) in bindings {
+                    let sym = rule.vars[varid.index()].name;
+                    let ident = typeenv.syms[sym.index()].clone();
+
+                    sexprs.push(self.smt.list(vec![
+                        self.smt.atom(ident),
+                        to_sexpr(annotation_infos, expr, parent_term),
+                    ]));
+                }
+                self.smt.list(vec![
+                    self.smt.atom("let"),
+                    self.smt.list(sexprs),
+                    to_sexpr(annotation_infos, body, parent_term),
+                ])
+            }
+        }
     }
 }
 
